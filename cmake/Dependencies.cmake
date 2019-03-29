@@ -811,6 +811,9 @@ if(USE_ROCM)
     # Ask hcc to generate device code during compilation so we can use
     # host linker to link.
     list(APPEND HIP_HCC_FLAGS -fno-gpu-rdc)
+    message("--------- setting hipcc debug flags ---------")
+    list(APPEND HIP_HCC_FLAGS -g)
+    list(APPEND HIP_HCC_FLAGS -O0)
     foreach(pytorch_rocm_arch ${PYTORCH_ROCM_ARCH})
       list(APPEND HIP_HCC_FLAGS --amdgpu-target=${pytorch_rocm_arch})
     endforeach()

@@ -71,33 +71,33 @@ int getBatch() {
 // typedef T (*MathOp)(const T in, const T arg);
 
 template <typename T>
-__device__ __forceinline__ T power2(const T in, const T power) {
+__device__ __host__ __forceinline__ T power2(const T in, const T power) {
   return THCNumerics<T>::mul(in, in);
 }
 
 template <typename T>
-__device__ __forceinline__ T root2(const T in, const T power) {
+__device__ __host__ __forceinline__ T root2(const T in, const T power) {
   return THCNumerics<T>::sqrt(in);
 }
 
 template <typename T>
-__device__ __forceinline__ T powerGrad2(const T in, const T power) {
+__device__ __host__ __forceinline__ T powerGrad2(const T in, const T power) {
   return in;
 }
 
 template <typename T>
-__device__ __forceinline__ T powerN(const T in, const T power) {
+__device__ __host__ __forceinline__ T powerN(const T in, const T power) {
   return THCNumerics<T>::pow(in, power);
 }
 
 template <typename T>
-__device__ __forceinline__ T rootN(const T in, const T power) {
+__device__ __host__ __forceinline__ T rootN(const T in, const T power) {
   const T invPower = THCNumerics<T>::cinv(power);
   return THCNumerics<T>::pow(in, invPower);
 }
 
 template <typename T>
-__device__ __forceinline__ T powerGradN(const T in, const T power) {
+__device__ __host__ __forceinline__ T powerGradN(const T in, const T power) {
   return THCNumerics<T>::pow(in,
                              THCNumerics<T>::sub(power,
                                                  ScalarConvert<int, T>::to(1)));

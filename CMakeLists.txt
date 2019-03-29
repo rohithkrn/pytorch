@@ -352,6 +352,8 @@ if(NOT APPLE AND UNIX)
   list(APPEND Caffe2_DEPENDENCY_LIBS dl)
 endif()
 
+SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O0 -g")
+
 # Prefix path to Caffe2 headers.
 # If a directory containing installed Caffe2 headers was inadvertently
 # added to the list of include directories, prefixing
