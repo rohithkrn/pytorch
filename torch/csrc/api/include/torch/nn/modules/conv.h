@@ -5,6 +5,8 @@
 #include <torch/nn/pimpl.h>
 #include <torch/types.h>
 
+#include <torch/csrc/WindowsTorchApiMacro.h>
+
 #include <cstddef>
 #include <vector>
 
@@ -18,9 +20,9 @@ struct ConvOptions {
       int64_t input_channels,
       int64_t output_channels,
       ExpandingArray<D> kernel_size) :
-		input_channels_(input_channels),
-		output_channels_(output_channels),
-		kernel_size_(std::move(kernel_size)) {}
+                input_channels_(input_channels),
+                output_channels_(output_channels),
+                kernel_size_(std::move(kernel_size)) {}
 
   /// The number of channels the input volumes will have.
   /// Changing this parameter after construction __has no effect__.
@@ -87,6 +89,9 @@ class ConvImpl : public torch::nn::Cloneable<Derived> {
   explicit ConvImpl(ConvOptions<D> options);
 
   void reset() override;
+
+  /// Pretty prints the `Conv{1,2,3}d` module into the given `stream`.
+  void pretty_print(std::ostream& stream) const override;
 
   /// The options with which this `Module` was constructed.
   ConvOptions<D> options;
