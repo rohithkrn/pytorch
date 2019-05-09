@@ -169,8 +169,8 @@ __global__ void AxpySliceKernel(
       }
     }
     */
-    for (int j = threadIdx.x; j < slice_size; j+= blockDim.x){
-      atomicAdd(&y_offset[j], alpha[0] * X[i * slice_size]);
+    for (int j = threadIdx.x; j < slice_size; j += blockDim.x){
+      atomicAdd(&y_offset[j], alpha[0] * X[(i * slice_size) + j]);
     }
   }
 }
@@ -200,15 +200,15 @@ bool ScatterWeightedSumOp<float, CUDAContext>::DoRunWithType() {
   int64_t block_size = M / N;
 
   float* data = output->template mutable_data<float>();
-
+  
   auto& X1 = Input(3);
   auto& weight1 = Input(4);
-
-  /* 
+  
+  /*
   // In order to have all device pointers of x_i (and weight_i similarly)
   // consecutively in device memory, copy pointers to a host vector and then
   // copy back into a device array.
-  const int64_t B = (InputSize() - 3) / 2;
+  const int64_t B = (InputSize() - 3) / 2; 
   ReinitializeTensor(&x_data_host_, {B}, at::dtype<const float*>().device(CPU));
   ReinitializeTensor(&weights_host_, {B}, at::dtype<const float*>().device(CPU));
   ReinitializeTensor(&x_data_device_, {B}, at::dtype<const float*>().device(CUDA));
@@ -238,6 +238,8 @@ bool ScatterWeightedSumOp<float, CUDAContext>::DoRunWithType() {
       K,
       //B,
       block_size,
+      //x_data_device,
+      //weights_device,
       weight1.template data<float>(),
       X1.template data<float>(),
       indices.template data<Index>(),
