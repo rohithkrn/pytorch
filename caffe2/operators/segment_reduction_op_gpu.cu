@@ -407,7 +407,7 @@ __global__ void sparse_length_weighted_sum_kernel(
 
 } // namespace
 
-template <typename T, class Context = CUDAContext, bool SparseFused = true>
+template <class Context = CUDAContext, bool SparseFused = true>
 class CUDASparseLengthsSumOp : public Operator<CUDAContext> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
@@ -419,17 +419,36 @@ class CUDASparseLengthsSumOp : public Operator<CUDAContext> {
   ~CUDASparseLengthsSumOp() {}
 
   bool RunOnDevice() override {
-    if (SparseFused) {
-      return DispatchHelper<TensorTypes<int32_t, int64_t>>::call(
-          this, Input(INDICES));
+    return DispatchHelper<TensorTypes<at::Half, float>>::call(
+        this, Input(0));
+      /*
+      if(Input(0).IsType<at::half>() && Input(INDICES).IsType<int64_t>()){
+        return DoRunWithType<at::half, int64_t>();
+      } else if(Input(0).IsType<at::half> && Input(INDICES).IsType<int32_t>()){
+        return DoRunWithType<at::half, int32_t>();
+      } else if(Input(0).IsType<float>() && Input(INDICES).IsType<int64_t>()){
+        return DoRunWithType<float, int64_t>();   
+      } else {
+        return DoRunWithType<float, int32_t>();
+      }
     } else {
       // type doesn't matter
-      return DoRunWithType<int32_t>();
+      return DoRunWithType<float, int32_t>();
+    } */
+  }
+
+  template<typename InputType>
+  bool DoRunWithType(){
+    if(SparseFused) {
+    return DispatchHelper<TensorTypes2<int32_t, int64_t>, InputType>::call(
+        this, Input(INDICES));
+    } else {
+    return DoRunWithType2<InputType, int32_t>();
     }
   }
 
-  template <typename IndexType>
-  bool DoRunWithType() {
+  template <typename T, typename IndexType>
+  bool DoRunWithType2() {
     auto& dataInput = Input(0);
     auto& lengthsInput = Input(LENGTHS);
 
@@ -1251,10 +1270,10 @@ class SortedSegmentRangeMeanGradientOp : public Operator<Context> {
 
 REGISTER_CUDA_OPERATOR_STR(
     "LengthsSum",
-    CUDASparseLengthsSumOp<float, CUDAContext, false>);
+    CUDASparseLengthsSumOp<CUDAContext, false>);
 REGISTER_CUDA_OPERATOR_STR(
     "SparseLengthsSum",
-    CUDASparseLengthsSumOp<float, CUDAContext, true>);
+    CUDASparseLengthsSumOp<CUDAContext, true>);
 REGISTER_CUDA_OPERATOR_STR(
     "LengthsMean",
     CUDASparseLengthsMeanOp<float, CUDAContext, false>);
@@ -1289,7 +1308,7 @@ REGISTER_CUDA_OPERATOR_STR(
     "SortedSegmentRangeLogMeanExpGradient",
     SortedSegmentRangeMeanGradientOp<float, int, true>);
 
-template <typename T, class Context = CUDAContext>
+template <class Context = CUDAContext>
 class CUDASparseLengthsSumGradientWithIndicesOp : public Operator<CUDAContext> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
@@ -1301,6 +1320,12 @@ class CUDASparseLengthsSumGradientWithIndicesOp : public Operator<CUDAContext> {
   ~CUDASparseLengthsSumGradientWithIndicesOp() {}
 
   bool RunOnDevice() override {
+    return DispatchHelper<TensorTypes<at::Half, float>>::call(this, Input(0));
+
+  }  
+  
+  template <typename T>
+  bool DoRunWithType() {
     auto& segmentGradsInput = Input(0);
     auto& lengthsInput = Input(1);
     auto& indicesInput = Input(2);
@@ -1817,11 +1842,11 @@ REGISTER_CUDA_OPERATOR(
 
 REGISTER_CUDA_OPERATOR(
     SparseLengthsIndicesInGradientSumGradient,
-    CUDASparseLengthsSumGradientWithIndicesOp<float, CUDAContext>);
+    CUDASparseLengthsSumGradientWithIndicesOp<CUDAContext>);
 
 REGISTER_CUDA_OPERATOR(
     LengthsIndicesInGradientSumGradient,
-    CUDASparseLengthsSumGradientWithIndicesOp<float, CUDAContext>);
+    CUDASparseLengthsSumGradientWithIndicesOp<CUDAContext>);
 
 REGISTER_CUDA_OPERATOR(
     SparseLengthsIndicesInGradientMeanGradient,
@@ -1834,7 +1859,7 @@ REGISTER_CUDA_OPERATOR(
 
 // Macro doesn't like comma
 using LengthsSumCUDAOp =
-    caffe2::CUDASparseLengthsSumOp<float, caffe2::CUDAContext, false>;
+    caffe2::CUDASparseLengthsSumOp<caffe2::CUDAContext, false>;
 using LengthsMeanCUDAOp =
     caffe2::CUDASparseLengthsMeanOp<float, caffe2::CUDAContext, false>;
 using LengthsMaxCUDAOp =
