@@ -38,6 +38,13 @@ ELSE()
   SET(ROCBLAS_PATH $ENV{ROCBLAS_PATH})
 ENDIF()
 
+# RCCL_PATH
+IF(NOT DEFINED ENV{RCCL_PATH})
+  SET(RCCL_PATH ${ROCM_PATH}/rccl)
+ELSE()
+  SET(RCCL+PATH $ENV{RCCL_PATH})
+ENDIF()
+
 # ROCFFT_PATH
 IF(NOT DEFINED ENV{ROCFFT_PATH})
   SET(ROCFFT_PATH ${ROCM_PATH}/rocfft)
@@ -116,12 +123,14 @@ IF(HIP_FOUND)
   set(miopen_DIR ${MIOPEN_PATH}/lib/cmake/miopen)
   set(rocfft_DIR ${ROCFFT_PATH}/lib/cmake/rocfft)
   set(hipsparse_DIR ${HIPSPARSE_PATH}/lib/cmake/hipsparse)
+  set(rccl_DIR ${RCCL_PATH}/lib/cmake/rccl)
 
   find_package_and_print_version(hiprand REQUIRED)
   find_package_and_print_version(rocblas REQUIRED)
   find_package_and_print_version(miopen REQUIRED)
   find_package_and_print_version(rocfft REQUIRED)
   find_package_and_print_version(hipsparse REQUIRED)
+  find_package_and_print_version(rccl REQUIRED)
 
   # TODO: hip_hcc has an interface include flag "-hc" which is only
   # recognizable by hcc, but not gcc and clang. Right now in our
@@ -131,7 +140,7 @@ IF(HIP_FOUND)
   # TODO: miopen_LIBRARIES should return fullpath to the library file,
   # however currently it's just the lib name
   FIND_LIBRARY(PYTORCH_MIOPEN_LIBRARIES ${miopen_LIBRARIES} HINTS ${MIOPEN_PATH}/lib)
-
+  FIND_LIBRARY(PYTORCH_RCCL_LIBRARIES ${rccl_LIBRARIES} HINTS ${RCCL_PATH}/lib)
 
   # Necessary includes for building PyTorch since we include HIP headers that depend on hcc/hsa headers.
   set(hcc_INCLUDE_DIRS ${HCC_PATH}/include)

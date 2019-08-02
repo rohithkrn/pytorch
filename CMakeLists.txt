@@ -110,6 +110,7 @@ option(USE_LITE_PROTO "Use lite protobuf instead of full." OFF)
 option(USE_LMDB "Use LMDB" OFF)
 option(USE_METAL "Use Metal for iOS build" ON)
 option(USE_NATIVE_ARCH "Use -march=native" OFF)
+option(USE_SYSTEM_RCCL "Use RCCL" OFF)
 cmake_dependent_option(
     USE_NCCL "Use NCCL" ON
     "USE_CUDA;UNIX;NOT APPLE" OFF)
