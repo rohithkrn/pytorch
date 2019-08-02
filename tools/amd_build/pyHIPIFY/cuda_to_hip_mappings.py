@@ -2321,6 +2321,7 @@ CAFFE2_SPECIFIC_MAPPINGS = collections.OrderedDict([
     ("cuda::OptionalCUDAStreamGuard", ("hip::OptionalHIPStreamGuard", API_CAFFE2)),
     ("c10/cuda/CUDAGuard.h", ("c10/hip/HIPGuard.h", API_CAFFE2)),
     ("gloo/cuda", ("gloo/hip", API_CAFFE2)),
+    ("<nccl.h>", ("<rccl.h>", API_CAFFE2)),
 ])
 
 # We must tread very carefully here.  Blanket conversions like are done
