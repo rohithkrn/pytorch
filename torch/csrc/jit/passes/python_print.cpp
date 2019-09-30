@@ -934,7 +934,18 @@ struct PythonPrintPass {
   }
 
   void printOpName(TaggedStringStream& stmt, Symbol kind) {
-    if (kind.is_aten()) {
+    // Special overriding ops set that requires serializing differently to
+    // preserve the original code semantics.
+    // This will be more properly handled when we have namespace semantics
+    // for serializing the ops, and it right now hard coded these ops to
+    // ensure consistency and not breaking BC in the future.
+    const static std::unordered_map<Symbol, std::string> override_symbols = {
+        {aten::backward, "torch.autograd.backward"},
+        {aten::grad, "torch.autograd.grad"},
+    };
+    if (override_symbols.find(kind) != override_symbols.end()) {
+      stmt << override_symbols.at(kind);
+    } else if (kind.is_aten()) {
       // special case aten -> torch because we want to rename
       // the aten namespace, but this change will take more time
       // doing it here ensures we do not have fix up archives later
@@ -950,22 +961,17 @@ struct PythonPrintPass {
     switch (node->kind()) {
       case prim::PythonOp: {
         auto value = static_cast<const PythonOp*>(node);
-        if (enforce_importable_ && !value->ignore_on_export) {
+        if (enforce_importable_) {
           throw script::ErrorReport(node->sourceRange())
               << "Could not export Python function call '" << value->name()
               << "'. Remove calls to Python functions before export. "
               << "Did you forget add @script or @script_method annotation? "
               << "If this is a nn.ModuleList, add it to __constants__";
         }
-
-        if (value->ignore_on_export) {
-          stmt << "ops.prim.IgnoredPythonOp";
-        } else {
-          std::stringstream scalars_stream;
-          stmt << "^" << value->name();
-          value->writeScalars(scalars_stream);
-          stmt << scalars_stream.str();
-        }
+        std::stringstream scalars_stream;
+        stmt << "^" << value->name();
+        value->writeScalars(scalars_stream);
+        stmt << scalars_stream.str();
         printValueList(stmt, node->inputs(), "(", ")");
       } break;
       case prim::Uninitialized: {

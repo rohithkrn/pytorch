@@ -307,8 +307,44 @@ static inline ScalarType toUnderlying(ScalarType t) {
   }
 }
 
+static inline bool isSignedType(ScalarType t) {
+  #define CASE_SIGNED(ctype, name) \
+    case ScalarType::name:                       \
+      return std::numeric_limits<ctype>::is_signed;
+
+    switch (t) {
+      AT_FORALL_SCALAR_TYPES_AND2(Half, BFloat16, CASE_SIGNED)
+      default:
+        AT_ERROR("Unknown ScalarType");
+    }
+  #undef CASE_SIGNED
+}
+
 static inline bool isUnderlying(ScalarType type, ScalarType qtype) {
   return type == toUnderlying(qtype);
+}
+
+// see tensor_attributes.rst for detailed explanation and examples
+// of casting rules.
+static inline bool canCast(const ScalarType from, const ScalarType to) {
+  // We disallow float -> integral, e.g., int_tensor *= float is disallowed.
+  if (isFloatingType(from) && isIntegralType(to, false)) {
+    return false;
+  }
+
+  // Treat bool as a distinct "category," to be consistent with type promotion
+  // rules (e.g. `bool_tensor + 5 -> int64_tensor`). If `5` was in the same category
+  // as `bool_tensor`, we would not promote.
+  // Differing categories implies `bool_tensor += 5` is disallowed.
+  //
+  // NB: numpy distinguishes "unsigned" as a category to get the desired
+  // `bool_tensor + 5 -> int64_tensor` behavior. We don't, because:
+  // * We don't want the performance hit of checking the runtime sign of Scalars.
+  // * `uint8_tensor + 5 -> int64_tensor` would be undesirable.
+  if (from != ScalarType::Bool && to == ScalarType::Bool) {
+    return false;
+  }
+  return true;
 }
 
 static inline ScalarType promoteTypes(ScalarType a, ScalarType b) {
@@ -329,6 +365,10 @@ static inline ScalarType promoteTypes(ScalarType a, ScalarType b) {
   if (a == ud || b == ud) {
     return ScalarType::Undefined;
   }
+  if (isComplexType(a) || isComplexType(b)) {
+    AT_ERROR(
+        "promoteTypes with complex numbers is not handled yet; figure out what the correct rules should be for ", toString(a), " and ", toString(b));
+  }
 
   // For QInt types, we only allow exact match
   if (isQIntType(a) && a == b) {
@@ -337,7 +377,10 @@ static inline ScalarType promoteTypes(ScalarType a, ScalarType b) {
 
   if (isQIntType(a) || isQIntType(b)) {
     AT_ERROR(
-        "promoteTypes with quantized numbers is not handled yet; figure out what the correct rules should be");
+        "promoteTypes with quantized numbers is not handled yet; figure out what the correct rules should be, offending types: ",
+        toString(a),
+        " ",
+        toString(b));
   }
 
   // this matrix has to be consistent with AT_FORALL_SCALAR_TYPES_WITH_COMPLEX
