@@ -19,7 +19,7 @@ accreal THCTensor_(dot)(THCState *state, THCTensor *self, THCTensor *src)
        THTensor_nDimension(self), THTensor_nDimension(src));
   }
 
-#if defined(THC_REAL_IS_FLOAT) || defined(THC_REAL_IS_DOUBLE) || defined(THC_REAL_IS_HALF) || defined(THC_REAL_IS_BFLOAT16)
+#if defined(THC_REAL_IS_FLOAT) || defined(THC_REAL_IS_DOUBLE) || defined(THC_REAL_IS_HALF)
   THCAssertSameGPU(THCTensor_(checkGPU)(state, 2, self, src));
   THArgCheck(THCTensor_(nElement)(state, self) ==
              THCTensor_(nElement)(state, src), 2, "sizes do not match");
