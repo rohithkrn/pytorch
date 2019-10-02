@@ -42,11 +42,6 @@ accreal THCTensor_(dot)(THCState *state, THCTensor *self, THCTensor *src)
                                 THCTensor_(nElement)(state, self),
                                 THCTensor_(data)(state, self), 1,
                                 THCTensor_(data)(state, src), 1);
-#elif defined(THC_REAL_IS_BFLOAT16)
-  accreal result = THCudaBlas_Bdot(state,
-                                THCTensor_(nElement)(state, self),
-                                THCTensor_(data)(state, self), 1,
-                                THCTensor_(data)(state, src), 1);
 #endif
 
   THCTensor_(free)(state, src);
@@ -789,26 +784,8 @@ void THCTensor_(baddbmm)(THCState *state, THCTensor *result, THCTensor *t,
 
 #elif defined(THC_REAL_IS_BFLOAT16)
 
-#if CUDA_VERSION < 9010 && !defined(__HIP_PLATFORM_HCC)
-  // Currently no HgemmBatched in Cublas
-  for (int64_t i = 0; i < num_batches; ++i) {
-    THCudaBlas_Bgemm(
-        state,
-        transpose_batch1,
-        transpose_batch2,
-        result_->size(transpose_result ? 2 : 1),
-        result_->size(transpose_result ? 1 : 2),
-        batch1_->size(transpose_result ? 1 : 2),
-        alpha,
-        THCTensor_(data)(state, batch1_) + i * batch1_->stride(0), lda,
-        THCTensor_(data)(state, batch2_) + i * batch2_->stride(0), ldb,
-        beta,
-        THCTensor_(data)(state, result_) + i * result_->stride(0), ldc);
-  }
-#else
 #ifndef __HIP_PLATFORM_HCC__
-  cudaDeviceProp* prop = at::cuda::getCurrentDeviceProperties();
-  if (prop->major >= 5){
+  TORCH_CHECK(false, "BgemmStridedBatched is not supported with at::BFloat16 type");
 #endif
   THCudaBlas_BgemmStridedBatched(
       state,
@@ -823,25 +800,6 @@ void THCTensor_(baddbmm)(THCState *state, THCTensor *result, THCTensor *t,
       beta,
       THCTensor_(data)(state, result_), ldc, result_->stride(0),
       num_batches);
-#ifndef __HIP_PLATFORM_HCC__
-   } else {
-      for (int64_t i = 0; i < num_batches; ++i) {
-        THCudaBlas_Bgemm(
-        state,
-        transpose_batch1,
-        transpose_batch2,
-        result_->size(transpose_result ? 2 : 1),
-        result_->size(transpose_result ? 1 : 2),
-        batch1_->size(transpose_result ? 1 : 2),
-        alpha,
-        THCTensor_(data)(state, batch1_) + i * batch1_->stride(0), lda,
-        THCTensor_(data)(state, batch2_) + i * batch2_->stride(0), ldb,
-        beta,
-        THCTensor_(data)(state, result_) + i * result_->stride(0), ldc);
-      }
-   }
-#endif // __HIP_PLATFORM_HCC__
-#endif // CUDA VERSION
 
 #endif // THC_REAL_IS_BFLOAT16
 

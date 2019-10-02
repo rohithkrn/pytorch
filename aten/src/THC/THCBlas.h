@@ -9,7 +9,6 @@
 THC_API float THCudaBlas_Sdot(THCState *state, int64_t n, float *x, int64_t incx, float *y, int64_t incy);
 THC_API double THCudaBlas_Ddot(THCState *state, int64_t n, double *x, int64_t incx, double *y, int64_t incy);
 THC_API THHalf THCudaBlas_Hdot(THCState *state, int64_t n, THHalf *x, int64_t incx, THHalf *y, int64_t incy);
-THC_API at::BFloat16 THCudaBlas_Bdot(THCState *state, int64_t n, at::BFloat16 *x, int64_t incx, at::BFloat16 *y, int64_t incy);
 
 /* Level 2 */
 THC_API void THCudaBlas_Sgemv(THCState *state, char trans, int64_t m, int64_t n, float alpha, float *a, int64_t lda, float *x, int64_t incx, float beta, float *y, int64_t incy);
@@ -39,7 +38,7 @@ THC_API void THCudaBlas_DgemmStridedBatched(THCState *state, char transa, char t
                                      double beta, double *c, int64_t ldc, int64_t strideC, int64_t batchCount);
 #endif
 
-#if CUDA_VERSION >= 9010
+#if CUDA_VERSION >= 9010 || defined __HIP_PLATFORM_HCC__
 void THCudaBlas_HgemmStridedBatched(THCState *state, char transa, char transb, int64_t m, int64_t n, int64_t k,
                                      THHalf alpha, const THHalf *a, int64_t lda, int64_t strideA, const THHalf *b, int64_t ldb, int64_t strideB,
                                                                   THHalf beta, THHalf *c, int64_t ldc, int64_t strideC, int64_t batchCount);

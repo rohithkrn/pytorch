@@ -273,6 +273,9 @@ void gemm<at::Half>(CUDABLAS_GEMM_ARGTYPES(at::Half)) {
 
 template <>
 void gemm<at::BFloat16>(CUDABLAS_GEMM_ARGTYPES(at::BFloat16)) {
+#ifndef __HIP_PLATFORM_HCC__
+  TORCH_CHECK(false, "at::cuda::blas::gemm: doesn't support at::BFloat16 type");
+#endif  	  
   cublasHandle_t handle = at::cuda::getCurrentCUDABlasHandle();
   cublasOperation_t opa = _cublasOpFromChar(transa);
   cublasOperation_t opb = _cublasOpFromChar(transb);
@@ -281,7 +284,6 @@ void gemm<at::BFloat16>(CUDABLAS_GEMM_ARGTYPES(at::BFloat16)) {
   _cublasAdjustLdLevel3(transa, transb, m, n, k, &lda, &ldb, &ldc);
   GEMM_CHECK_ARGVALUES(at::BFloat16);
   TORCH_CUDABLAS_CHECK(cublasSetStream(handle, stream));
-#ifdef __HIP_PLATFORM_HCC__
   TORCH_CUDABLAS_CHECK(rocblas_gemm_ex(
       handle,
       opa,
@@ -307,57 +309,6 @@ void gemm<at::BFloat16>(CUDABLAS_GEMM_ARGTYPES(at::BFloat16)) {
       rocblas_gemm_algo_standard,
       0,
       0));
-#else
-
-# if CUDA_VERSION >= 9000
-  cudaDeviceProp* prop = at::cuda::getCurrentDeviceProperties();
-  if (prop->major >= 5) {
-    TORCH_CUDABLAS_CHECK(cublasSetMathMode(handle, CUBLAS_TENSOR_OP_MATH));
-    TORCH_CUDABLAS_CHECK(cublasGemmEx(
-        handle,
-        opa,
-        opb,
-        m,
-        n,
-        k,
-        &falpha,
-        a,
-        CUDA_R_16F,
-        lda,
-        b,
-        CUDA_R_16F,
-        ldb,
-        &fbeta,
-        c,
-        CUDA_R_16F,
-        ldc,
-        CUDA_R_32F,
-        CUBLAS_GEMM_DFALT_TENSOR_OP));
-    TORCH_CUDABLAS_CHECK(cublasSetMathMode(handle, CUBLAS_DEFAULT_MATH));
-  } else {
-# endif
-    TORCH_CUDABLAS_CHECK(cublasSgemmEx(
-        handle,
-        opa,
-        opb,
-        m,
-        n,
-        k,
-        &falpha,
-        a,
-        CUDA_R_16F,
-        lda,
-        b,
-        CUDA_R_16F,
-        ldb,
-        &fbeta,
-        c,
-        CUDA_R_16F,
-        ldc));
-# if CUDA_VERSION >= 9000
-  }
-# endif
-#endif
 }
 
 
