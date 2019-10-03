@@ -13,7 +13,7 @@ inline int dataSize(miopenDataType_t dataType)
   switch (dataType) {
     case miopenHalf: return 2;
     case miopenFloat: return 4;
-    case miopeBFloat16: return 2;
+    case miopenBFloat16: return 2;
     default: return 8;
   }
 }
