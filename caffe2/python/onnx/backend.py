@@ -13,6 +13,7 @@ from __future__ import unicode_literals
 import os
 import collections
 from subprocess import Popen, PIPE
+import sys
 import zipfile
 import itertools
 
@@ -172,6 +173,7 @@ class Caffe2Backend(Backend):
         'Loop':                  'ONNXWhile',
         'Tile':                  'NumpyTile',
         'RandomNormal':          'GaussianFill',
+        'RandomUniform':         'UniformFill',
     }
 
     _global_renamed_attrs = {'kernel_shape': 'kernels'}
@@ -184,7 +186,9 @@ class Caffe2Backend(Backend):
         'ConvTranspose':        {'output_padding': 'adjs'},
         'Selu':                 {'gamma': 'scale'},
         'If':                   {'then_branch': 'then_net',
-                                 'else_branch': 'else_net'}
+                                 'else_branch': 'else_net'},
+        'RandomUniform':        {'low': 'min',
+                                 'high': 'max'}
     }
 
     # operators whose behavior is different beyond renaming
@@ -392,7 +396,7 @@ class Caffe2Backend(Backend):
         direction = force_unicode(attrs.pop('direction', 'forward'))
 
         if n.op_type == 'RNN':
-            activation = force_unicode(attrs.pop('activations', ('tanh',))[0])
+            activation = force_unicode(attrs.pop('activations', ('tanh',))[0].lower())
         elif n.op_type == 'GRU':
             linear_before_reset = attrs.pop('linear_before_reset', 0)
 
@@ -644,7 +648,10 @@ class Caffe2Backend(Backend):
             if value_info.name in initialized:
                 continue
             shape = list(d.dim_value for d in value_info.type.tensor_type.shape.dim)
-            ws.FeedBlob(value_info.name, np.ones(shape), device_option)
+            ws.FeedBlob(
+                value_info.name,
+                np.ones(shape, dtype=onnx.mapping.TENSOR_TYPE_TO_NP_TYPE[value_info.type.tensor_type.elem_type]),
+                device_option)
 
     @staticmethod
     def optimize_onnx(input, init=False, predict=False):
@@ -881,7 +888,7 @@ class Caffe2Backend(Backend):
 
         cls._dummy_name.reset(cls._all_names_in_graph(init_model.graph) | cls._all_names_in_graph(pred_model.graph))
 
-        success = True
+        errors = []
         for net, model in ( (init_net, init_model), (pred_net, pred_model) ):
             net.device_option.CopyFrom(device_option)
             for node in model.graph.node:
@@ -889,8 +896,9 @@ class Caffe2Backend(Backend):
                     c2ops = cls._onnx_node_to_caffe2_op(
                         init_model, pred_model, node, opset_version)
                 except Exception as e:
-                    success = False
-                    print('ONNX FATAL:', e)
+                    msg = 'Error while processing node: {}. Exception: {}'.format(node, e)
+                    errors.append(msg)
+                    print('ONNX FATAL:', msg, file=sys.stderr)
                     continue
                 init_net.op.extend(c2ops.init_ops)
                 net.op.extend(c2ops.ops)
@@ -900,8 +908,10 @@ class Caffe2Backend(Backend):
             net.external_input.extend(
                 value_info.name for value_info in model.graph.input)
 
-        if not success:
-            raise RuntimeError('ONNX conversion failed')
+        if len(errors) > 0:
+            raise RuntimeError(
+                "ONNX conversion failed, encountered {} errors:\n\n{}".format(
+                    len(errors), "\n\n".join(errors)))
 
         return init_net, pred_net
 
@@ -916,7 +926,7 @@ class Caffe2Backend(Backend):
         if device.type == DeviceType.CPU:
             return True
         elif core.IsGPUDeviceType(device.type):
-            return workspace.has_gpu_support or workspace.has_hip_support
+            return workspace.has_gpu_support
         return False
 
     @classmethod

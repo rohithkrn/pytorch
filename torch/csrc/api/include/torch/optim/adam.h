@@ -31,9 +31,9 @@ struct TORCH_API AdamOptions {
 class TORCH_API Adam : public Optimizer {
  public:
   template <typename ParameterContainer>
-  explicit Adam(ParameterContainer&& parameters, const AdamOptions& options)
+  explicit Adam(ParameterContainer&& parameters, const AdamOptions& options_)
       : Optimizer(std::forward<ParameterContainer>(parameters)),
-        options(options) {}
+        options(options_) {}
 
   void step() override;
 
@@ -52,10 +52,10 @@ class TORCH_API Adam : public Optimizer {
 
   template <typename Self, typename Archive>
   static void serialize(Self& self, Archive& archive) {
-    TORCH_OPTIM_SERIALIZE(step_buffers);
-    TORCH_OPTIM_SERIALIZE(exp_average_buffers);
-    TORCH_OPTIM_SERIALIZE(exp_average_sq_buffers);
-    TORCH_OPTIM_SERIALIZE(max_exp_average_sq_buffers);
+    _TORCH_OPTIM_SERIALIZE(step_buffers);
+    _TORCH_OPTIM_SERIALIZE(exp_average_buffers);
+    _TORCH_OPTIM_SERIALIZE(exp_average_sq_buffers);
+    _TORCH_OPTIM_SERIALIZE(max_exp_average_sq_buffers);
   }
 };
 } // namespace optim

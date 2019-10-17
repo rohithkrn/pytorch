@@ -18,7 +18,7 @@ template <typename TInd>
 bool BatchGatherOp<CUDAContext>::DoRunWithType() {
   // BatchGather is a special-case of Gather with Axis = 1, wrap = false.
   return gather_helper::gather_impl_cuda<TInd>(
-      this, DATA, INDICES, 0, 1, false);
+      this, DATA, INDICES, 0, 1, false, match_outer_);
 }
 
 template <typename T_INDEX, typename TData>
@@ -68,10 +68,12 @@ bool BatchGatherGradientOp<CUDAContext>::DoRunWithType() {
 template <>
 template <typename TInd, typename TData>
 bool BatchGatherGradientOp<CUDAContext>::DoRunWithType2() {
+  CAFFE_ENFORCE(
+      !match_outer_, "match_outer=true is currently only supported for CPU");
+
   auto& data = Input(DATA);
   auto& indices = Input(INDICES);
   auto& grad = Input(GRAD);
-  auto* output = Output(0);
 
   // ONNX allows negative axis to index from the back, valid range: [-r, r].
   int axis = axis_;
@@ -85,9 +87,9 @@ bool BatchGatherGradientOp<CUDAContext>::DoRunWithType2() {
         data.size(acheck), grad.size(acheck), "batch sizes should be the same");
   }
 
-  output->ResizeLike(data);
+  auto* output = Output(0, data.sizes(), at::dtype<float>());
   auto* out_data = output->template mutable_data<float>();
-  math::Set<float, CUDAContext>(output->size(), 0, out_data, &context_);
+  math::Set<float, CUDAContext>(output->numel(), 0, out_data, &context_);
 
   const auto* grad_data = grad.template data<float>();
   const TInd* idxs = indices.template data<TInd>();
@@ -96,7 +98,7 @@ bool BatchGatherGradientOp<CUDAContext>::DoRunWithType2() {
   const int outer_dims_product = grad.size_to_dim(axis);
   const int block_size = data.size_from_dim(axis + 1);
 
-  const int N = indices.size();
+  const int N = indices.numel();
   const auto data_batch_size = data.size_from_dim(axis);
   const auto gathered_batch_size = N * block_size;
   const int src_indexing_axis_dim = data.dim(axis);
@@ -128,8 +130,8 @@ bool BatchGatherGradientOp<CUDAContext>::DoRunWithOtherType2() {
   CAFFE_THROW(
       "BatchGatherGradient is not implemented on tensor of type ",
       Input(DATA).meta().name(),
-      "Consider adding it a type in the list DispatchHelper or implementing "
-      "a generic version (which won't work for duplicated indices though)");
+      "consider adding it as a type in the DispatchHelper list or implementing"
+      " a generic version (which won't work for duplicated indices though)");
 }
 
 REGISTER_CUDA_OPERATOR(BatchGather, BatchGatherOp<CUDAContext>);

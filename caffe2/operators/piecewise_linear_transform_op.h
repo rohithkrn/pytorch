@@ -2,7 +2,10 @@
 #define CAFFE2_OPERATORS_PIECEWISE_LINEAR_TRANSFORM_OP_H_
 
 #include "caffe2/core/context.h"
+#include "caffe2/core/export_caffe2_op_to_c10.h"
 #include "caffe2/core/operator.h"
+
+C10_DECLARE_EXPORT_CAFFE2_OP_TO_C10(PiecewiseLinearTransform);
 
 namespace caffe2 {
 
@@ -11,8 +14,9 @@ class PiecewiseLinearTransformOp final : public Operator<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
 
-  PiecewiseLinearTransformOp(const OperatorDef& operator_def, Workspace* ws)
-      : Operator<Context>(operator_def, ws) {
+  template <class... Args>
+  explicit PiecewiseLinearTransformOp(Args&&... args)
+      : Operator<Context>(std::forward<Args>(args)...) {
     binary_ = this->template GetSingleArgument<bool>("binary", false);
 
     // Retrieve transform params (i.e., the linear functions).

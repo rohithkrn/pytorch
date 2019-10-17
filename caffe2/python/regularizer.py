@@ -42,6 +42,9 @@ class Regularizer(object):
     def _run_after_optimizer(self, net, param_init_net, param, grad):
         return None
 
+    def _feature_grouping(self, param, net):
+        return None
+
     def _ensure_clipped(
         self,
         net,
@@ -84,6 +87,76 @@ class L1Norm(Regularizer):
         net.Scale([output_blob], [output_blob], scale=self.reg_lambda)
         return output_blob
 
+class FCInputLpNorm(Regularizer):
+    def __init__(self, reg_lambda, p_value=0.5):
+        super(FCInputLpNorm, self).__init__()
+        assert reg_lambda >= 0, "factor ahead of regularization should be 0 or positive"
+        assert p_value >= 0, "p_value factor should be 0 or positive"
+        self.p_value = p_value
+        self.reg_lambda = reg_lambda
+
+    def _feature_grouping(self, param, net):
+        # Possible alternative grouping method via summing over absolute values
+        # Compute l2norm over feature weights
+        # pow( sum_i { pow(theda_i, 2) } ,  0.5)
+        param_mul = net.Mul([param, param], [net.NextScopedBlob("param_mul")])
+        param_reduced = net.ReduceFrontSum(
+            [param_mul], [net.NextScopedBlob("param_reduced")]
+        )
+        grouped_feature_weight_vec = net.Pow(
+            [param_reduced],
+            [net.NextScopedBlob("grouped_feature_weight_vec")],
+            exponent=0.5,
+        )
+
+        return grouped_feature_weight_vec
+
+    def _run_on_loss(self, net, param_init_net, param, grad=None):
+        # TODO: the second dim (num of input nodes) of param is after feature preproc,
+        # and does not correspond to the original num of dense features.
+        # In the future, will want to create a util to reduce the input dim of param to
+        # match the num of dense features.
+
+        output_blob = net.NextScopedBlob(param + "_dense_feature_regularization")
+        grouped_feature_weight_vec = self._feature_grouping(param, net)
+
+        # Compute Lpnorm over l2norm:
+        # pow( sum_i { pow(theda_i, p) } ,  1/p)
+        lp_vec_raised = net.Pow(
+            [grouped_feature_weight_vec], [net.NextScopedBlob("lp_vec_raised")], exponent=self.p_value
+        )
+        lp_vec_summed = net.ReduceFrontSum(
+            [lp_vec_raised], [net.NextScopedBlob("lp_vec_summed")]
+        )
+        lp_vec = net.Pow(
+            [lp_vec_summed], [net.NextScopedBlob("lp_vec")], exponent=(1 / self.p_value)
+        )
+        net.Scale([lp_vec], [output_blob], scale=self.reg_lambda)
+        return output_blob
+
+class L1NormTrimmed(Regularizer):
+    """
+    The Trimmed Lasso: Sparsity and Robustness. https://arxiv.org/abs/1708.04527
+    """
+    def __init__(self, reg_lambda, k):
+        super(L1NormTrimmed, self).__init__()
+        assert reg_lambda >= 0, "factor ahead of regularization should be 0 or positive"
+        assert isinstance(k, int), "k should be an interger as expected #. after selection"
+        assert k >= 1, "k should be larger than 1"
+
+        self.reg_lambda = reg_lambda
+        self.k = k
+
+    def _run_on_loss(self, net, param_init_net, param, grad=None):
+        output_blob = net.NextScopedBlob(param + "_l1_trimmed_regularization")
+        abs = net.Abs([param], [net.NextScopedBlob("abs")])
+        sum_abs = net.SumElements([abs], [net.NextScopedBlob("sum_abs")], average=False)
+        topk, _, _ = net.TopK([abs], [net.NextScopedBlob("topk"), net.NextScopedBlob("id"), net.NextScopedBlob("flat_id")], k=self.k)
+        topk_sum = net.SumElements([topk], [net.NextScopedBlob("topk_sum")], average=False)
+        net.Sub([sum_abs, topk_sum], [output_blob])
+        net.Scale([output_blob], [output_blob], scale=self.reg_lambda)
+        return output_blob
+
 
 class L2Norm(Regularizer):
     def __init__(self, reg_lambda):
@@ -99,6 +172,49 @@ class L2Norm(Regularizer):
         return output_blob
 
 
+class ElasticNet(Regularizer):
+    def __init__(self, l1, l2):
+        super(ElasticNet, self).__init__()
+        self.l1 = l1
+        self.l2 = l2
+
+    def _run_on_loss(self, net, param_init_net, param, grad=None):
+        output_blob = net.NextScopedBlob(param + "_elastic_net_regularization")
+        l2_blob = net.NextScopedBlob(param + "_l2_blob")
+        l1_blob = net.NextScopedBlob(param + "_l1_blob")
+        net.LpNorm([param], [l2_blob], p=2)
+        net.LpNorm([param], [l1_blob], p=1)
+        net.Scale([l2_blob], [l2_blob], scale=self.l2)
+        net.Scale([l1_blob], [l1_blob], scale=self.l1)
+        net.Add([l1_blob, l2_blob], [output_blob])
+        return output_blob
+
+
+class ElasticNetL1NormTrimmed(Regularizer):
+    def __init__(self, l1, l2, k):
+        super(ElasticNetL1NormTrimmed, self).__init__()
+        self.l1 = l1
+        self.l2 = l2
+        self.k = k
+
+    def _run_on_loss(self, net, param_init_net, param, grad=None):
+        output_blob = net.NextScopedBlob(param + "_elastic_net_l1_trimmed_regularization")
+        l2_blob = net.NextScopedBlob(param + "_l2_blob")
+        net.LpNorm([param], [l2_blob], p=2)
+        net.Scale([l2_blob], [l2_blob], scale=self.l2)
+
+        l1_blob = net.NextScopedBlob(param + "_l1_blob")
+        abs = net.Abs([param], [net.NextScopedBlob("abs")])
+        sum_abs = net.SumElements([abs], [net.NextScopedBlob("sum_abs")], average=False)
+        topk, _, _ = net.TopK([abs], [net.NextScopedBlob("topk"), net.NextScopedBlob("id"), net.NextScopedBlob("flat_id")], k=self.k)
+        topk_sum = net.SumElements([topk], [net.NextScopedBlob("topk_sum")], average=False)
+        net.Sub([sum_abs, topk_sum], [l1_blob])
+        net.Scale([l1_blob], [l1_blob], scale=self.l1)
+
+        net.Add([l1_blob, l2_blob], [output_blob])
+        return output_blob
+
+
 class MaxNorm(Regularizer):
     def __init__(self, norm=1.0):
         super(MaxNorm, self).__init__()
@@ -108,7 +224,7 @@ class MaxNorm(Regularizer):
         assert self.norm > 0, "norm should be bigger than 0."
         if isinstance(grad, core.GradientSlice):
             net.SparseNormalize(
-                [param, grad.indices, grad.values],
+                [param, grad.indices],
                 [param],
                 use_max_norm=True,
                 norm=self.norm,
@@ -126,7 +242,7 @@ class ConstantNorm(Regularizer):
         assert self.norm > 0, "norm should be bigger than 0."
         if isinstance(grad, core.GradientSlice):
             net.SparseNormalize(
-                [param, grad.indices, grad.values],
+                [param, grad.indices],
                 [param],
                 use_max_norm=False,
                 norm=self.norm,

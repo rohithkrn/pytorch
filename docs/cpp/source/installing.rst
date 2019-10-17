@@ -19,6 +19,8 @@ example:
   wget https://download.pytorch.org/libtorch/nightly/cpu/libtorch-shared-with-deps-latest.zip
   unzip libtorch-shared-with-deps-latest.zip
 
+Note that the above link has CPU-only libtorch. If you would like to download a GPU-enabled
+libtorch, find the right link in the link selector on https://pytorch.org
 
 Next, we can write a minimal CMake build configuration to develop a small
 application that depends on LibTorch. CMake is not a hard requirement for using
@@ -36,6 +38,18 @@ this:
   add_executable(example-app example-app.cpp)
   target_link_libraries(example-app "${TORCH_LIBRARIES}")
   set_property(TARGET example-app PROPERTY CXX_STANDARD 11)
+
+  # The following code block is suggested to be used on Windows.
+  # According to https://github.com/pytorch/pytorch/issues/25457,
+  # the DLLs need to be copied to avoid memory errors.
+  if (MSVC)
+    file(GLOB TORCH_DLLS "${TORCH_INSTALL_PREFIX}/lib/*.dll")
+    add_custom_command(TARGET example-app
+                       POST_BUILD
+                       COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                       ${TORCH_DLLS}
+                       $<TARGET_FILE_DIR:example-app>)
+  endif (MSVC)
 
 The implementation of our example will simply create a new `torch::Tensor` and
 print it:
@@ -118,10 +132,15 @@ should now merrily print the tensor (exact output subject to randomness):
 
 .. code-block:: sh
 
-  root@4b5a67132e81:/example-app/build# ./example-app model.pt
+  root@4b5a67132e81:/example-app/build# ./example-app
   0.2063  0.6593  0.0866
   0.0796  0.5841  0.1569
   [ Variable[CPUFloatType]{2,3} ]
+
+.. tip::
+  On Windows, debug and release builds are not ABI-compatible. If you plan to
+  build your project in debug mode, we recommend
+  `building PyTorch from source <https://github.com/pytorch/pytorch#from-source>`_.
 
 Support
 -------

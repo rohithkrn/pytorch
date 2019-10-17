@@ -1,13 +1,8 @@
 #include <gtest/gtest.h>
 
-#include <torch/nn/modules/functional.h>
-#include <torch/nn/modules/linear.h>
-#include <torch/nn/modules/sequential.h>
-#include <torch/optim/optimizer.h>
-#include <torch/optim/sgd.h>
-#include <torch/serialize.h>
-#include <torch/types.h>
-#include <torch/utils.h>
+#include <c10/util/tempfile.h>
+
+#include <torch/torch.h>
 
 #include <test/cpp/api/support.h>
 
@@ -54,7 +49,7 @@ TEST(SerializeTest, BasicToFile) {
 
   auto x = torch::randn({5, 5});
 
-  auto tempfile = torch::utils::make_tempfile();
+  auto tempfile = c10::make_tempfile();
   torch::save(x, tempfile.name);
 
   torch::Tensor y;
@@ -135,7 +130,7 @@ TEST(SerializeTest, XOR) {
     epoch++;
   }
 
-  auto tempfile = torch::utils::make_tempfile();
+  auto tempfile = c10::make_tempfile();
   torch::save(model, tempfile.name);
   torch::load(model2, tempfile.name);
 
@@ -149,7 +144,7 @@ TEST(SerializeTest, Optim) {
   auto model3 = Linear(5, 2);
 
   // Models 1, 2, 3 will have the same parameters.
-  auto model_tempfile = torch::utils::make_tempfile();
+  auto model_tempfile = c10::make_tempfile();
   torch::save(model1, model_tempfile.name);
   torch::load(model2, model_tempfile.name);
   torch::load(model3, model_tempfile.name);
@@ -194,7 +189,7 @@ TEST(SerializeTest, Optim) {
   // Do 2 steps of model 3 while saving the optimizer
   step(optim3, model3);
 
-  auto optim_tempfile = torch::utils::make_tempfile();
+  auto optim_tempfile = c10::make_tempfile();
   torch::save(optim3, optim_tempfile.name);
   torch::load(optim3_2, optim_tempfile.name);
   step(optim3_2, model3);
@@ -210,6 +205,27 @@ TEST(SerializeTest, Optim) {
     ASSERT_TRUE(
         param1[name].norm().item<float>() != param2[name].norm().item<float>());
   }
+}
+
+TEST(SerializeTest, SerializationShouldPreserveIteration_SGD) {
+  std::vector<torch::Tensor> parameters = {
+      torch::randn({2, 2}), torch::randn({3, 3})};
+
+  torch::optim::SGD optimizer(parameters, 1.0);
+
+  optimizer.step();
+  optimizer.step();
+
+  ASSERT_EQ(optimizer.iteration(), 2);
+
+  auto tempfile = c10::make_tempfile();
+  torch::save(optimizer, tempfile.name);
+
+  torch::optim::SGD optimizer_out(parameters, 1.0);
+  ASSERT_EQ(optimizer_out.iteration(), 0);
+
+  torch::load(optimizer_out, tempfile.name);
+  ASSERT_EQ(optimizer_out.iteration(), 2);
 }
 
 TEST(SerializeTest, XOR_CUDA) {
@@ -253,7 +269,7 @@ TEST(SerializeTest, XOR_CUDA) {
     epoch++;
   }
 
-  auto tempfile = torch::utils::make_tempfile();
+  auto tempfile = c10::make_tempfile();
   torch::save(model, tempfile.name);
   torch::load(model2, tempfile.name);
 
@@ -264,7 +280,7 @@ TEST(SerializeTest, XOR_CUDA) {
   loss = getLoss(model2, 100, true);
   ASSERT_LT(loss.item<float>(), 0.1);
 
-  auto tempfile2 = torch::utils::make_tempfile();
+  auto tempfile2 = c10::make_tempfile();
   torch::save(model2, tempfile2.name);
   torch::load(model3, tempfile2.name);
 
@@ -301,4 +317,116 @@ TEST(
 
   const int output = in->named_buffers()["a.c.foo"].sum().item<int>();
   ASSERT_EQ(output, 5);
+}
+
+TEST(SerializeTest, VectorOfTensors) {
+  torch::manual_seed(0);
+
+  std::vector<torch::Tensor> x_vec = { torch::randn({1, 2}), torch::randn({3, 4}) };
+
+  std::stringstream stream;
+  torch::save(x_vec, stream);
+
+  std::vector<torch::Tensor> y_vec;
+  torch::load(y_vec, stream);
+
+  for (int64_t i = 0; i < x_vec.size(); i++) {
+    auto& x = x_vec[i];
+    auto& y = y_vec[i];
+    ASSERT_TRUE(y.defined());
+    ASSERT_EQ(x.sizes().vec(), y.sizes().vec());
+    ASSERT_TRUE(x.allclose(y));
+  }
+}
+
+TEST(SerializeTest, IValue) {
+  c10::IValue ivalue(1);
+  auto tempfile = c10::make_tempfile();
+  torch::serialize::OutputArchive output_archive;
+  output_archive.write("value", ivalue);
+  output_archive.save_to(tempfile.name);
+
+  torch::serialize::InputArchive input_archive;
+  input_archive.load_from(tempfile.name);
+  c10::IValue ivalue_out;
+  input_archive.read("value", ivalue_out);
+  ASSERT_EQ(ivalue_out.toInt(), 1);
+
+  ASSERT_THROWS_WITH(input_archive.read("bad_key", ivalue_out), "No such serialized IValue");
+}
+
+// NOTE: if a `Module` contains unserializable submodules (e.g. `nn::Functional`),
+// we expect those submodules to be skipped when the `Module` is being serialized.
+TEST(SerializeTest, UnserializableSubmoduleIsSkippedWhenSavingModule) {
+  struct A : torch::nn::Module {
+    A() {
+      register_module("relu", torch::nn::Functional(torch::relu));
+    }
+  };
+
+  auto out = std::make_shared<A>();
+  std::stringstream ss;
+  torch::save(out, ss);
+
+  torch::serialize::InputArchive archive;
+  archive.load_from(ss);
+  torch::serialize::InputArchive relu_archive;
+
+  // Submodule with name "relu" should not exist in the `InputArchive`,
+  // because the "relu" submodule is an `nn::Functional` and is not serializable.
+  ASSERT_FALSE(archive.try_read("relu", relu_archive));
+}
+
+// NOTE: If a `Module` contains unserializable submodules (e.g. `nn::Functional`),
+// we don't check the existence of those submodules in the `InputArchive` when
+// deserializing.
+TEST(SerializeTest, UnserializableSubmoduleIsIgnoredWhenLoadingModule) {
+  struct B : torch::nn::Module {
+    B() {
+      register_module("relu1", torch::nn::Functional(torch::relu));
+      register_buffer("foo", torch::zeros(5, torch::kInt32));
+    }
+  };
+  struct A : torch::nn::Module {
+    A() {
+      register_module("b", std::make_shared<B>());
+      register_module("relu2", torch::nn::Functional(torch::relu));
+    }
+  };
+
+  auto out = std::make_shared<A>();
+  // Manually change the values of "b.foo", so that we can check whether the buffer
+  // contains these values after deserialization.
+  out->named_buffers()["b.foo"].fill_(1);
+  auto tempfile = c10::make_tempfile();
+  torch::save(out, tempfile.name);
+
+  torch::serialize::InputArchive archive;
+  archive.load_from(tempfile.name);
+  torch::serialize::InputArchive archive_b;
+  torch::serialize::InputArchive archive_relu;
+  torch::Tensor tensor_foo;
+
+  ASSERT_TRUE(archive.try_read("b", archive_b));
+  ASSERT_TRUE(archive_b.try_read("foo", tensor_foo, /*is_buffer=*/true));
+
+  // Submodule with name "relu1" should not exist in `archive_b`, because the "relu1"
+  // submodule is an `nn::Functional` and is not serializable.
+  ASSERT_FALSE(archive_b.try_read("relu1", archive_relu));
+
+  // Submodule with name "relu2" should not exist in `archive`, because the "relu2"
+  // submodule is an `nn::Functional` and is not serializable.
+  ASSERT_FALSE(archive.try_read("relu2", archive_relu));
+
+  auto in = std::make_shared<A>();
+  // `torch::load(...)` works without error, even though `A` contains the `nn::Functional`
+  // submodules while the serialized file doesn't, because the `nn::Functional` submodules
+  // are not serializable and thus ignored when deserializing.
+  torch::load(in, tempfile.name);
+
+  // Check that the "b.foo" buffer is correctly deserialized from the file.
+  const int output = in->named_buffers()["b.foo"].sum().item<int>();
+  // `output` should equal to the sum of the values we manually assigned to "b.foo" before
+  // serialization.
+  ASSERT_EQ(output, 5);  
 }

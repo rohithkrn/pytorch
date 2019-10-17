@@ -1,6 +1,9 @@
 #include <gtest/gtest.h>
 
 #include <ATen/cuda/CUDAContext.h>
+#include <c10/cuda/impl/CUDAGuardImpl.h>
+#include <c10/core/impl/InlineEvent.h>
+#include <c10/core/Event.h>
 #include <c10/cuda/CUDAGuard.h>
 #include <ATen/cuda/CUDAMultiStreamGuard.h>
 #include <ATen/cuda/CUDAEvent.h>
@@ -217,7 +220,7 @@ TEST(TestStream, CUDAEventSyncTest) {
   const auto stream = at::cuda::getStreamFromPool();
   at::cuda::CUDAEvent event;
 
-  ASSERT_FALSE(event.happened());
+  ASSERT_TRUE(event.query());
 
   event.recordOnce(stream);
 
@@ -228,7 +231,7 @@ TEST(TestStream, CUDAEventSyncTest) {
   event.block(wait_stream1);
 
   cudaStreamSynchronize(wait_stream0);
-  ASSERT_TRUE(event.happened());
+  ASSERT_TRUE(event.query());
 }
 
 // Cross-Device Events
@@ -249,10 +252,52 @@ TEST(TestStream, CrossDeviceTest) {
 
   event0 = std::move(event1);
 
-  ASSERT_EQ_CUDA(event0.device(), 1);
+  ASSERT_EQ_CUDA(event0.device(), at::Device(at::kCUDA, 1));
 
   event0.block(stream0);
 
   cudaStreamSynchronize(stream0);
-  ASSERT_TRUE(event0.happened());
+  ASSERT_TRUE(event0.query());
+}
+
+// Generic Events
+TEST(TestStream, GenericInlineCUDAEventTest) {
+  if (!at::cuda::is_available()) return;
+
+  c10::impl::InlineEvent<c10::cuda::impl::CUDAGuardImpl> event{c10::DeviceType::CUDA};
+  c10::Stream stream = at::cuda::getStreamFromPool();
+
+  event.record(stream);
+
+  const c10::Stream wait_stream0 = at::cuda::getStreamFromPool();
+  const c10::Stream wait_stream1 = at::cuda::getStreamFromPool();
+
+  event.block(wait_stream0);
+  event.block(wait_stream1);
+
+  const at::cuda::CUDAStream cuda_stream{wait_stream0};
+  cudaStreamSynchronize(cuda_stream);
+
+  ASSERT_TRUE(event.query());
+}
+
+TEST(TestStream, GenericVirtualCUDAEventTest) {
+  if (!at::cuda::is_available()) return;
+
+  c10::Event event{c10::DeviceType::CUDA};
+  c10::Stream stream = at::cuda::getStreamFromPool();
+
+  event.recordOnce(stream);
+
+  const c10::Stream wait_stream0 = at::cuda::getStreamFromPool();
+  const c10::Stream wait_stream1 = at::cuda::getStreamFromPool();
+
+  wait_stream0.wait(event);
+  wait_stream1.wait(event);
+
+  const at::cuda::CUDAStream cuda_stream{wait_stream0};
+  cudaStreamSynchronize(cuda_stream);
+
+  ASSERT_TRUE(event.query());
+  ASSERT_TRUE(event.flag() == c10::EventFlag::PYTORCH_DEFAULT);
 }

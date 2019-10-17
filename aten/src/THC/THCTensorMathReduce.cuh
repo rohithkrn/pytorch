@@ -12,7 +12,7 @@
 #include <thrust/device_ptr.h>
 #include <thrust/transform_reduce.h>
 #include <thrust/inner_product.h>
-#if CUDA_VERSION >= 7000
+#if CUDA_VERSION >= 7000 || defined __HIP_PLATFORM_HCC__
 #include <thrust/system/cuda/execution_policy.h>
 #endif
 
@@ -96,17 +96,17 @@ struct ReduceWelford {
 
 template <typename T, typename U>
 struct VarianceWelford {
-  VarianceWelford(const int _biased, const bool _apply_sqrt): biased{_biased}, apply_sqrt(_apply_sqrt) {}
+  VarianceWelford(const int _unbiased, const bool _apply_sqrt): unbiased{_unbiased}, apply_sqrt(_apply_sqrt) {}
 
   inline __device__ T operator()(const WelfordData<T, U> &a) const {
-    T res = THCNumerics<T>::div(a.m_2_n_, biased!=0 ? a.count_ : a.count_-1);
+    T res = THCNumerics<T>::div(a.m_2_n_, unbiased ? a.count_ : a.count_-1);
     if (apply_sqrt) {
       return THCNumerics<T>::sqrt(res);
     }
     return res;
   }
 
-  const int biased;
+  const int unbiased;
   const bool apply_sqrt;
 };
 
@@ -371,7 +371,7 @@ kernelTransformReduceOuterDimIndex(K *tgt1,
       for (unsigned col = 0; col < row_size; ++col) {
         // +1 for Lua index
         acc = binary_op(acc,
-                        thrust::make_pair<K, Index>(*src, col + TH_INDEX_BASE));
+                        thrust::make_pair<K, Index>(*src, col));
         src += num_irows;
       }
 
@@ -451,7 +451,7 @@ kernelTransformReduceInnermostDimIndex(K *tgt1,
       K *src = src_ + row * row_size;
       // Sequential reduction within a thread.
       for (unsigned col = threadIdx.x; col < row_size; col += blockDim.x) {
-        acc = binary_op(acc, thrust::make_pair<K, Index>(src[col], col + TH_INDEX_BASE));
+        acc = binary_op(acc, thrust::make_pair<K, Index>(src[col], col));
       }
     }
 

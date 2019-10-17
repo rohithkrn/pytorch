@@ -8,6 +8,7 @@
 
 namespace at {
 namespace vec256 {
+// See Note [Acceptable use of anonymous namespace in header]
 namespace {
 
 #if defined(__AVX__) && !defined(_MSC_VER)
@@ -16,7 +17,10 @@ template <> class Vec256<double> {
 private:
   __m256d values;
 public:
-  static constexpr int size = 4;
+  using value_type = double;
+  static constexpr int size() {
+    return 4;
+  }
   Vec256() {}
   Vec256(__m256d v) : values(v) {}
   Vec256(double val) {
@@ -40,7 +44,7 @@ public:
     return Vec256<double>(base, base + step, base + 2 * step, base + 3 * step);
   }
   static Vec256<double> set(const Vec256<double>& a, const Vec256<double>& b,
-                            int64_t count = size) {
+                            int64_t count = size()) {
     switch (count) {
       case 0:
         return a;
@@ -53,22 +57,22 @@ public:
     }
     return b;
   }
-  static Vec256<double> loadu(const void* ptr, int64_t count = size) {
-    if (count == size)
+  static Vec256<double> loadu(const void* ptr, int64_t count = size()) {
+    if (count == size())
       return _mm256_loadu_pd(reinterpret_cast<const double*>(ptr));
 
-    __at_align32__ double tmp_values[size];
+    __at_align32__ double tmp_values[size()];
     std::memcpy(
         tmp_values,
         reinterpret_cast<const double*>(ptr),
         count * sizeof(double));
     return _mm256_load_pd(tmp_values);
   }
-  void store(void* ptr, int count = size) const {
-    if (count == size) {
+  void store(void* ptr, int count = size()) const {
+    if (count == size()) {
       _mm256_storeu_pd(reinterpret_cast<double*>(ptr), values);
     } else if (count > 0) {
-      double tmp_values[size];
+      double tmp_values[size()];
       _mm256_storeu_pd(reinterpret_cast<double*>(tmp_values), values);
       std::memcpy(ptr, tmp_values, count * sizeof(double));
     }
@@ -96,11 +100,17 @@ public:
   Vec256<double> atan() const {
     return Vec256<double>(Sleef_atand4_u10(values));
   }
+  Vec256<double> atan2(const Vec256<double> &b) const {
+    return Vec256<double>(Sleef_atan2d4_u10(values, b));
+  }
   Vec256<double> erf() const {
     return Vec256<double>(Sleef_erfd4_u10(values));
   }
   Vec256<double> erfc() const {
     return Vec256<double>(Sleef_erfcd4_u15(values));
+  }
+  Vec256<double> erfinv() const {
+    return map(calc_erfinv);
   }
   Vec256<double> exp() const {
     return Vec256<double>(Sleef_expd4_u10(values));
@@ -121,16 +131,16 @@ public:
     return Vec256<double>(Sleef_log1pd4_u10(values));
   }
   Vec256<double> sin() const {
-    return map(std::sin);
+    return Vec256<double>(Sleef_sind4_u10(values));
   }
   Vec256<double> sinh() const {
-    return map(std::sinh);
+    return Vec256<double>(Sleef_sinhd4_u10(values));
   }
   Vec256<double> cos() const {
-    return map(std::cos);
+    return Vec256<double>(Sleef_cosd4_u10(values));
   }
   Vec256<double> cosh() const {
-    return map(std::cos);
+    return Vec256<double>(Sleef_coshd4_u10(values));
   }
   Vec256<double> ceil() const {
     return _mm256_ceil_pd(values);
@@ -138,6 +148,7 @@ public:
   Vec256<double> floor() const {
     return _mm256_floor_pd(values);
   }
+  Vec256<double> frac() const;
   Vec256<double> neg() const {
     return _mm256_xor_pd(_mm256_set1_pd(-0.), values);
   }
@@ -145,13 +156,16 @@ public:
     return _mm256_round_pd(values, (_MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC));
   }
   Vec256<double> tan() const {
-    return map(std::tan);
+    return Vec256<double>(Sleef_tand4_u10(values));
   }
   Vec256<double> tanh() const {
     return Vec256<double>(Sleef_tanhd4_u10(values));
   }
   Vec256<double> trunc() const {
     return _mm256_round_pd(values, (_MM_FROUND_TO_ZERO | _MM_FROUND_NO_EXC));
+  }
+  Vec256<double> lgamma() const {
+    return Vec256<double>(Sleef_lgammad4_u10(values));
   }
   Vec256<double> sqrt() const {
     return _mm256_sqrt_pd(values);
@@ -213,6 +227,11 @@ Vec256<double> inline operator/(const Vec256<double>& a, const Vec256<double>& b
   return _mm256_div_pd(a, b);
 }
 
+// frac. Implement this here so we can use subtraction.
+Vec256<double> Vec256<double>::frac() const {
+  return *this - this->trunc();
+}
+
 // Implements the IEEE 754 201X `maximum` operation, which propagates NaN if
 // either input is a NaN.
 template <>
@@ -234,6 +253,21 @@ Vec256<double> inline minimum(const Vec256<double>& a, const Vec256<double>& b) 
 }
 
 template <>
+Vec256<double> inline clamp(const Vec256<double>& a, const Vec256<double>& min, const Vec256<double>& max) {
+  return _mm256_min_pd(max, _mm256_max_pd(min, a));
+}
+
+template <>
+Vec256<double> inline clamp_min(const Vec256<double>& a, const Vec256<double>& min) {
+  return _mm256_max_pd(min, a);
+}
+
+template <>
+Vec256<double> inline clamp_max(const Vec256<double>& a, const Vec256<double>& max) {
+  return _mm256_min_pd(max, a);
+}
+
+template <>
 Vec256<double> inline operator&(const Vec256<double>& a, const Vec256<double>& b) {
   return _mm256_and_pd(a, b);
 }
@@ -249,10 +283,10 @@ Vec256<double> inline operator^(const Vec256<double>& a, const Vec256<double>& b
 }
 
 template <>
-void convert(const double* src, double* dst, int64_t n) {
+inline void convert(const double* src, double* dst, int64_t n) {
   int64_t i;
 #pragma unroll
-  for (i = 0; i <= (n - Vec256<double>::size); i += Vec256<double>::size) {
+  for (i = 0; i <= (n - Vec256<double>::size()); i += Vec256<double>::size()) {
     _mm256_storeu_pd(dst + i, _mm256_loadu_pd(src + i));
   }
 #pragma unroll

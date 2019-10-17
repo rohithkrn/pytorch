@@ -182,7 +182,7 @@ template <class Context>
 class RecurrentNetworkOp final : public Operator<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
-  RecurrentNetworkOp(const OperatorDef& operator_def, Workspace* ws)
+  explicit RecurrentNetworkOp(const OperatorDef& operator_def, Workspace* ws)
       : Operator<Context>(operator_def, ws),
         sharedWs_(ws),
         enable_rnn_executor_(this->template GetSingleArgument<bool>(
@@ -329,6 +329,8 @@ class RecurrentNetworkOp final : public Operator<Context> {
     // of parallelism over timesteps that the RNNExecutor provides. So with
     // RNN executor we use more workspaces to get better perf.
     int num_workspaces_on_fwd_only = rnnExecutor_ ? 4 : 2;
+    num_workspaces_on_fwd_only = this->template GetSingleArgument<int>(
+        "num_workspaces", num_workspaces_on_fwd_only);
 
     if (!has_backward_pass && stepWorkspaces.size() < num_workspaces_on_fwd_only) {
       // Use alternating stepWorkspaces when forward_only=True.
@@ -416,7 +418,7 @@ template <class Context>
 class RecurrentNetworkGradientOp final : public Operator<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
-  RecurrentNetworkGradientOp(const OperatorDef& operator_def, Workspace* ws)
+  explicit RecurrentNetworkGradientOp(const OperatorDef& operator_def, Workspace* ws)
       : Operator<Context>(operator_def, ws),
         sharedWs_(ws),
         enable_rnn_executor_(this->template GetSingleArgument<bool>(
@@ -425,8 +427,8 @@ class RecurrentNetworkGradientOp final : public Operator<Context> {
         timestep_(this->template GetSingleArgument<std::string>(
             "timestep",
             "timestep")),
-        gradInputs_(this->template GetRepeatedArgument<int32_t>(
-            "outputs_with_grads")) {
+        gradInputs_(
+            this->template GetRepeatedArgument<int32_t>("outputs_with_grads")) {
     CAFFE_ENFORCE(ws);
 
     stepNetDef_ = detail::extractNetDef(operator_def, "backward_step_net");
@@ -849,8 +851,9 @@ class RecurrentNetworkGradientOp final : public Operator<Context> {
 template <class Context>
 class AccumulateInputGradientOp : public Operator<Context> {
  public:
-  AccumulateInputGradientOp(const OperatorDef& def, Workspace* ws)
-      : Operator<Context>(def, ws),
+  template <class... Args>
+  explicit AccumulateInputGradientOp(Args&&... args)
+      : Operator<Context>(std::forward<Args>(args)...),
         offset_(this->template GetSingleArgument<int>("offset", -1)) {
     CAFFE_ENFORCE(offset_ >= 0, "Offset not set");
   }
@@ -893,8 +896,9 @@ class AccumulateInputGradientOp : public Operator<Context> {
 template <class Context>
 class RNNApplyLinkOp : public Operator<Context> {
  public:
-  RNNApplyLinkOp(const OperatorDef& def, Workspace* ws)
-      : Operator<Context>(def, ws),
+  template <class... Args>
+  explicit RNNApplyLinkOp(Args&&... args)
+      : Operator<Context>(std::forward<Args>(args)...),
         offset_(this->template GetSingleArgument<int>("offset", -1)),
         window_(this->template GetSingleArgument<int>("window", -1)) {
     CAFFE_ENFORCE(offset_ >= 0, "offset not set");

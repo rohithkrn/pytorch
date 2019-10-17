@@ -2,6 +2,9 @@
 #define THC_GENERIC_FILE "THCUNN/generic/LookupTable.cu"
 #else
 
+#include <thrust/iterator/constant_iterator.h>
+#include <c10/macros/Macros.h>
+
 void THNN_(LookupTable_accGradParameters)(
            THCState *state,
            THCIndexTensor *input,
@@ -34,15 +37,14 @@ void THNN_(LookupTable_accGradParameters)(
   cudaStream_t stream = THCState_getCurrentStream(state);
 
   if (numel <= 768 && !scaleGradByFreq) {
-    const int WARP_SIZE = 32;
     const int BLOCKDIMY = 32;
-    dim3 grid(THCCeilDiv(stride, (int64_t)WARP_SIZE));
-    dim3 block(WARP_SIZE, BLOCKDIMY);
+    dim3 grid(THCCeilDiv(stride, (int64_t)C10_WARP_SIZE));
+    dim3 block(C10_WARP_SIZE, BLOCKDIMY);
 
     cunn_LookupTable_accGradParametersKernelByFeature<scalar_t, accreal>
     <<<grid,
        block,
-       sizeof(accreal)*WARP_SIZE*BLOCKDIMY + sizeof(int)*WARP_SIZE*BLOCKDIMY,
+       sizeof(accreal)*C10_WARP_SIZE*BLOCKDIMY + sizeof(int)*C10_WARP_SIZE*BLOCKDIMY,
        stream>>>
       (THCIndexTensor_(data)(state, input),
        THCTensor_(data)(state, gradOutput),
@@ -73,17 +75,17 @@ void THNN_(LookupTable_accGradParameters)(
       origIndicesIter(THCIndexTensor_(data)(state, origIndices));
 
     // Fill sortedOrigIndices with sequential indices
-    thrust::counting_iterator<THCIndex_t> countIter(TH_INDEX_BASE);
+    thrust::counting_iterator<THCIndex_t> countIter(0);
 
     thrust::copy(
-#if CUDA_VERSION >= 7000
+#if CUDA_VERSION >= 7000 || defined __HIP_PLATFORM_HCC__
       thrust::cuda::par(thrustAlloc).on(THCState_getCurrentStream(state)),
 #endif
       countIter, countIter + numel, origIndicesIter);
 
     // Sort; a stable sort is not required
     thrust::sort_by_key(
-#if CUDA_VERSION >= 7000
+#if CUDA_VERSION >= 7000 || defined __HIP_PLATFORM_HCC__
       thrust::cuda::par(thrustAlloc).on(THCState_getCurrentStream(state)),
 #endif
       sortedIndicesIter, sortedIndicesIter + numel,
@@ -106,7 +108,7 @@ void THNN_(LookupTable_accGradParameters)(
     // sorted: 2 5 5 5 7 7 8 9 9
     //  count: 1 1 2 3 1 2 1 1 2
     thrust::inclusive_scan_by_key(
-#if CUDA_VERSION >= 7000
+#if CUDA_VERSION >= 7000 || defined __HIP_PLATFORM_HCC__
       thrust::cuda::par(thrustAlloc).on(THCState_getCurrentStream(state)),
 #endif
       sortedIndices_ptr,
@@ -119,7 +121,7 @@ void THNN_(LookupTable_accGradParameters)(
     // sorted: 2 5 5 5 7 7 8 9 9
     //  count: 1 3 3 3 2 2 1 2 2
     thrust::inclusive_scan_by_key(
-#if CUDA_VERSION >= 7000
+#if CUDA_VERSION >= 7000 || defined __HIP_PLATFORM_HCC__
       thrust::cuda::par(thrustAlloc).on(THCState_getCurrentStream(state)),
 #endif
       thrust::make_reverse_iterator(sortedIndices_ptr + numel),

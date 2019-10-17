@@ -4,7 +4,6 @@
 
 #include <torch/csrc/autograd/function.h>
 #include <torch/csrc/autograd/engine.h>
-#include <torch/csrc/autograd/python_anomaly_mode.h>
 
 bool THPEngine_initModule(PyObject *module);
 
@@ -12,7 +11,7 @@ namespace torch { namespace autograd { namespace python {
 
 struct PythonEngine : public Engine {
   void thread_init(int device) override;
-  void thread_on_exception(FunctionTask& task, std::exception& e) override;
+  void thread_on_exception(NodeTask& task, std::exception& e) override;
   variable_list execute(
       const edge_list& roots,
       const variable_list& inputs,

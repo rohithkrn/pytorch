@@ -30,9 +30,9 @@ class TORCH_API Adagrad : public Optimizer {
   template <typename ParameterContainer>
   explicit Adagrad(
       ParameterContainer&& parameters,
-      const AdagradOptions& options)
+      const AdagradOptions& options_)
       : Optimizer(std::forward<ParameterContainer>(parameters)),
-        options(options) {}
+        options(options_) {}
 
   void step() override;
 
@@ -49,8 +49,8 @@ class TORCH_API Adagrad : public Optimizer {
 
   template <typename Self, typename Archive>
   static void serialize(Self& self, Archive& archive) {
-    TORCH_OPTIM_SERIALIZE(sum_buffers);
-    TORCH_OPTIM_SERIALIZE(step_buffers);
+    _TORCH_OPTIM_SERIALIZE(sum_buffers);
+    _TORCH_OPTIM_SERIALIZE(step_buffers);
   }
 };
 } // namespace optim

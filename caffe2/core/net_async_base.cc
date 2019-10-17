@@ -16,6 +16,11 @@ C10_DEFINE_bool(
     false,
     "If set, use one single chain containing all ops");
 
+C10_DEFINE_bool(
+    caffe2_net_async_profile_operators,
+    false,
+    "If set, profile operators of the net regardless of net being prof_dag.");
+
 C10_DEFINE_int(
     caffe2_net_async_max_gpus,
     16,
@@ -151,7 +156,7 @@ TaskThreadPoolBase* AsyncNetBase::poolGetter(
   std::unique_lock<std::mutex> pools_lock(pools_mutex_);
   auto pool = pools[device_id][pool_size];
   if (!pool) {
-    pool = ThreadPoolRegistry()->Create(
+    pool = c10::ThreadPoolRegistry()->Create(
         DeviceTypeName(device_type),
         device_id,
         pool_size,
@@ -369,7 +374,7 @@ void AsyncNetBase::handleChainError(
     int task_id,
     OperatorBase* op,
     const char* err_str,
-    bool save_exception) {
+    bool save_exception) noexcept {
   std::string err_msg = err_str;
   if (op) {
     err_msg += ",  op " + (op->has_debug_def() ? op->type() : " unknown");
@@ -385,7 +390,7 @@ void AsyncNetBase::handleChainError(
   }
 }
 
-bool AsyncNetBase::run(int task_id, int stream_id) {
+bool AsyncNetBase::run(int task_id, int stream_id) noexcept {
   OperatorBase* op = nullptr;
   try {
     // Optionally insert async wait ops,
@@ -393,6 +398,10 @@ bool AsyncNetBase::run(int task_id, int stream_id) {
     // all parents are guaranteed to be finished
     if (!options_.finish_chain_) {
       asyncWait(task_id, stream_id, parents(task_id));
+    }
+    int iter_id = -1;
+    if (tracer_) {
+      iter_id = tracer_->getIter();
     }
     for (auto& op_id : chains_[task_id]) {
       op = operators_[op_id];
@@ -404,7 +413,9 @@ bool AsyncNetBase::run(int task_id, int stream_id) {
             tracing::TRACE_TASK,
             task_id,
             tracing::TRACE_STREAM,
-            stream_id);
+            stream_id,
+            tracing::TRACE_ITER,
+            iter_id);
         success = op->RunAsync(stream_id);
       } else {
         counters_.AddPerOpStartTime(op_id);
@@ -461,38 +472,22 @@ void AsyncNetBase::finalizeEvents() {
 }
 
 ProfDAGProtos AsyncNetBase::GetOperatorStats() const {
-  return counters_.GetOperatorStats();
+  return counters_.GetReport().GetOperatorStats();
 }
 
 ProfDAGProtos AsyncNetBase::GetPerOperatorCost() const {
-  return counters_.GetPerOperatorCost();
+  return counters_.GetReport().GetPerOperatorCost();
+}
+
+ProfDAGReport AsyncNetBase::GetProfReport() const {
+  return counters_.GetReport();
 }
 
 AsyncNetBase::~AsyncNetBase() {
   if (options_.report_stats_) {
-    counters_.PrintStats();
+    counters_.GetReport().PrintStats();
   }
 }
-
-C10_DEFINE_SHARED_REGISTRY(
-    ThreadPoolRegistry,
-    TaskThreadPoolBase,
-    int,
-    int,
-    bool);
-
-C10_REGISTER_CREATOR(
-    ThreadPoolRegistry,
-    CPU,
-    GetAsyncNetThreadPool<TaskThreadPool, PROTO_CPU>);
-C10_REGISTER_CREATOR(
-    ThreadPoolRegistry,
-    CUDA,
-    GetAsyncNetThreadPool<TaskThreadPool, PROTO_CUDA>);
-C10_REGISTER_CREATOR(
-    ThreadPoolRegistry,
-    HIP,
-    GetAsyncNetThreadPool<TaskThreadPool, PROTO_HIP>);
 
 ExecutionOptions::ExecutionOptions(
     const std::shared_ptr<const NetDef>& net_def) {
@@ -550,7 +545,27 @@ ExecutionOptions::ExecutionOptions(
     }
   }
 
+  if (FLAGS_caffe2_net_async_profile_operators) {
+    report_stats_ = true;
+  }
   run_root_tasks_inline_ = FLAGS_caffe2_net_async_run_root_tasks_inline;
 }
 
 } // namespace caffe2
+
+namespace c10 {
+
+C10_REGISTER_CREATOR(
+    ThreadPoolRegistry,
+    CPU,
+    caffe2::GetAsyncNetThreadPool<TaskThreadPool, caffe2::PROTO_CPU>);
+C10_REGISTER_CREATOR(
+    ThreadPoolRegistry,
+    CUDA,
+    caffe2::GetAsyncNetThreadPool<TaskThreadPool, caffe2::PROTO_CUDA>);
+C10_REGISTER_CREATOR(
+    ThreadPoolRegistry,
+    HIP,
+    caffe2::GetAsyncNetThreadPool<TaskThreadPool, caffe2::PROTO_HIP>);
+
+} // namespace c10

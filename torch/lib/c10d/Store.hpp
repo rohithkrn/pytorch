@@ -17,6 +17,9 @@ class Store {
 
   Store() : timeout_(kDefaultTimeout) {}
 
+  explicit Store(const std::chrono::milliseconds& timeout)
+      : timeout_(timeout) {}
+
   virtual ~Store();
 
   virtual void set(
@@ -35,7 +38,7 @@ class Store {
       const std::vector<std::string>& keys,
       const std::chrono::milliseconds& timeout) = 0;
 
-  void setTimeout(const std::chrono::seconds& timeoutSec);
+  void setTimeout(const std::chrono::milliseconds& timeout);
 
  protected:
   std::chrono::milliseconds timeout_;

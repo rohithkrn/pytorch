@@ -44,25 +44,28 @@ static bool gather_impl_cuda(
     int indicesIdx,
     int outputIdx,
     int axis,
-    bool wrap_indices) {
+    bool wrap_indices,
+    bool match_outer) {
   const Tensor& data = op->Input(dataIdx);
   const Tensor& indices = op->Input(indicesIdx);
   const TypeMeta dataType = data.dtype();
   size_t item_bytesize = dataType.itemsize();
+
+  CAFFE_ENFORCE(!match_outer, "match_outer=true is currently NOT supported for CUDA");
 
   // ONNX allows negative axis to index from the back, valid range: [-r, r].
   if (axis < 0) {
     axis = data.dim() + axis;
   }
   CAFFE_ENFORCE_GE(
-      data.ndim(), axis + 1, "DATA should be at least [axis+1]-D");
+      data.dim(), axis + 1, "DATA should be at least [axis+1]-D");
   CAFFE_ENFORCE_GE(axis, 0, "Axis should be non-negative");
-  CAFFE_ENFORCE_LT(axis, data.ndim(), "Axis out of range");
+  CAFFE_ENFORCE_LT(axis, data.dim(), "Axis out of range");
 
   // New shape:
   //  [data dims before axis] + [indices dims] + [data dims after axis]
   vector<int64_t> shape =
-      calc_output_shape_vector<int64_t>(data.dims(), indices.dims(), axis);
+      calc_output_shape_vector<int64_t>(data.sizes(), indices.sizes(), axis, match_outer);
   Tensor* output = op->Output(outputIdx, shape, at::dtype(dataType));
   float* out = static_cast<float*>(output->raw_mutable_data(dataType));
 
@@ -70,7 +73,7 @@ static bool gather_impl_cuda(
   // would have data dimension size of 0.
   // This *must* be done AFTER output->raw_mutable_data() above as that has
   // important allocation side effect that we must see.
-  if (output->size() == 0) {
+  if (output->numel() == 0) {
     return true;
   }
 
@@ -83,7 +86,7 @@ static bool gather_impl_cuda(
   const int src_indexing_axis_dim = data.size(axis);
   // Treat indices as a single block even if they have multiple dimensions.
   // The "gathered batch" is a cumulative result combining indexed blocks.
-  const int N = indices.size();
+  const int N = indices.numel();
   auto gathered_batch_size = N * block_size;
   const auto src_batch_size = data.size_from_dim(axis);
 

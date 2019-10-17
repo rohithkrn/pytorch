@@ -50,12 +50,12 @@ macro(Check_Lapack_Libraries LIBRARIES _prefix _name _flags _list _blas)
         if(APPLE)
           find_library(${_prefix}_${_library}_LIBRARY
             NAMES ${_library}
-            PATHS /usr/local/lib /usr/lib /usr/local/lib64 /usr/lib64
+            PATHS /usr/local/lib /usr/lib /usr/local/lib64 /usr/lib64 /usr/lib/aarch64-linux-gnu
             ENV DYLD_LIBRARY_PATH)
         else(APPLE)
           find_library(${_prefix}_${_library}_LIBRARY
             NAMES ${_library}
-            PATHS /usr/local/lib /usr/lib /usr/local/lib64 /usr/lib64
+            PATHS /usr/local/lib /usr/lib /usr/local/lib64 /usr/lib64 /usr/lib/aarch64-linux-gnu
             ENV LD_LIBRARY_PATH)
         endif(APPLE)
       endif(WIN32)
@@ -143,6 +143,21 @@ if(BLAS_FOUND)
     endif()
   endif()
 
+  # FLAME
+  IF((NOT LAPACK_INFO) AND (BLAS_INFO STREQUAL "FLAME"))
+    check_lapack_libraries(
+      LAPACK_LIBRARIES
+      LAPACK
+      cheev
+      ""
+      "flame"
+      "${BLAS_LIBRARIES}"
+      )
+    if(LAPACK_LIBRARIES)
+      SET(LAPACK_INFO "FLAME")
+    endif(LAPACK_LIBRARIES)
+  endif()
+
   # ACML
   IF((NOT LAPACK_INFO) AND (BLAS_INFO STREQUAL "acml"))
     SET(CMAKE_REQUIRED_LIBRARIES ${BLAS_LIBRARIES})
@@ -185,7 +200,7 @@ IF (NOT LAPACK_FOUND AND LAPACK_FIND_REQUIRED)
 ENDIF (NOT LAPACK_FOUND AND LAPACK_FIND_REQUIRED)
 IF(NOT LAPACK_FIND_QUIETLY)
   IF(LAPACK_FOUND)
-    MESSAGE(STATUS "Found a library with LAPACK API. (${LAPACK_INFO})")
+    MESSAGE(STATUS "Found a library with LAPACK API (${LAPACK_INFO}).")
   ELSE(LAPACK_FOUND)
     MESSAGE(STATUS "Cannot find a library with LAPACK API. Not using LAPACK.")
   ENDIF(LAPACK_FOUND)

@@ -86,15 +86,15 @@ TEST(TensorTest, ToTensorAndTensorAttributes_MultiCUDA) {
 TEST(TensorTest, ToDoesNotCopyWhenOptionsAreAllTheSame_CUDA) {
   auto tensor = at::empty({3, 4}, at::TensorOptions(at::kFloat).device(at::Device("cuda")));
   auto hopefully_not_copy = tensor.to(tensor.options());
-  ASSERT_EQ(hopefully_not_copy.data<float>(), tensor.data<float>());
+  ASSERT_EQ(hopefully_not_copy.data_ptr<float>(), tensor.data_ptr<float>());
   hopefully_not_copy = tensor.to(at::kFloat);
-  ASSERT_EQ(hopefully_not_copy.data<float>(), tensor.data<float>());
+  ASSERT_EQ(hopefully_not_copy.data_ptr<float>(), tensor.data_ptr<float>());
   hopefully_not_copy = tensor.to("cuda");
-  ASSERT_EQ(hopefully_not_copy.data<float>(), tensor.data<float>());
+  ASSERT_EQ(hopefully_not_copy.data_ptr<float>(), tensor.data_ptr<float>());
   hopefully_not_copy = tensor.to(at::TensorOptions("cuda"));
-  ASSERT_EQ(hopefully_not_copy.data<float>(), tensor.data<float>());
+  ASSERT_EQ(hopefully_not_copy.data_ptr<float>(), tensor.data_ptr<float>());
   hopefully_not_copy = tensor.to(at::TensorOptions(at::kFloat));
-  ASSERT_EQ(hopefully_not_copy.data<float>(), tensor.data<float>());
+  ASSERT_EQ(hopefully_not_copy.data_ptr<float>(), tensor.data_ptr<float>());
 }
 
 TEST(TensorTest, ToDeviceAndDtype_MultiCUDA) {
@@ -112,4 +112,12 @@ TEST(TensorTest, ToDeviceAndDtype_MultiCUDA) {
 
   tensor = tensor.to(at::kCPU, at::kInt);
   REQUIRE_TENSOR_OPTIONS(at::kCPU, -1, at::kInt, at::kStrided);
+}
+
+TEST(TensorTest, MagmaInitializesCorrectly_CUDA) {
+  auto tensor = at::arange(1, 17, at::TensorOptions(at::kFloat).device(at::Device("cuda")));
+  tensor = tensor.view({4, 4});
+  if (at::hasMAGMA()) {
+    at::inverse(tensor);
+  }
 }

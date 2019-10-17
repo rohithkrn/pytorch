@@ -12,6 +12,8 @@ tree are also possible. In both cases, the script allows filtering files via
 glob or regular expressions.
 """
 
+from __future__ import print_function
+
 import argparse
 import collections
 import fnmatch
@@ -37,7 +39,8 @@ Patterns = collections.namedtuple("Patterns", "positive, negative")
 DEFAULT_FILE_PATTERN = re.compile(r".*\.c(c|pp)?")
 
 # @@ -start,count +start,count @@
-CHUNK_PATTERN = r"^@@\s+-\d+,\d+\s+\+(\d+)(?:,(\d+))?\s+@@"
+CHUNK_PATTERN = r"^@@\s+-\d+(?:,\d+)?\s+\+(\d+)(?:,(\d+))?\s+@@"
+
 
 # Set from command line arguments in main().
 VERBOSE = False
@@ -123,6 +126,9 @@ def get_changed_lines(revision, filename):
     for chunk in re.finditer(CHUNK_PATTERN, output, re.MULTILINE):
         start = int(chunk.group(1))
         count = int(chunk.group(2) or 1)
+        # If count == 0, a chunk was removed and can be ignored.
+        if count == 0:
+            continue
         changed_lines.append([start, start + count])
 
     return {"name": filename, "lines": changed_lines}
@@ -146,7 +152,7 @@ def run_shell_commands_in_parallel(commands):
     build_entries = [build_template.format(i=i, cmd=' '.join([quote(s) for s in command]))
                      for i, command in enumerate(commands)]
 
-    file_contents = ninja_template.format(build_rules='\n'.join(build_entries))
+    file_contents = ninja_template.format(build_rules='\n'.join(build_entries)).encode()
     f = tempfile.NamedTemporaryFile(delete=False)
     try:
         f.write(file_contents)
@@ -287,7 +293,7 @@ def main():
     if options.diff:
         line_filters = [get_changed_lines(options.diff, f) for f in files]
 
-    print(run_clang_tidy(options, line_filters, files))
+    print(run_clang_tidy(options, line_filters, files), file=sys.stderr)
 
 
 if __name__ == "__main__":

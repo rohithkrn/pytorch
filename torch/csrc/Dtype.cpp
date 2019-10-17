@@ -20,16 +20,16 @@ PyObject * THPDtype_New(at::ScalarType scalar_type, const std::string& name)
   return self.release();
 }
 
-PyObject *THPDtype_is_floating_point(THPDtype *self)
+PyObject *THPDtype_is_floating_point(THPDtype *self, PyObject *noargs)
 {
-  if (at::isFloatingType(self->scalar_type)) {
+  if (at::isFloatingType(self->scalar_type) || at::isComplexType(self->scalar_type)) {
     Py_RETURN_TRUE;
   } else {
     Py_RETURN_FALSE;
   }
 }
 
-PyObject *THPDtype_reduce(THPDtype *self)
+PyObject *THPDtype_reduce(THPDtype *self, PyObject *noargs)
 {
   /*
   * For singletons, a string is returned. The string should be interpreted
@@ -52,7 +52,8 @@ static PyMethodDef THPDtype_methods[] = {
 
 PyObject *THPDtype_repr(THPDtype *self)
 {
-  return THPUtils_packString(self->name);
+  std::string name = self->name;
+  return THPUtils_packString("torch." + name);
 }
 
 PyTypeObject THPDtypeType = {

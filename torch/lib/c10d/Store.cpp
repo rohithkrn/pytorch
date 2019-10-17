@@ -9,11 +9,8 @@ constexpr std::chrono::milliseconds Store::kNoTimeout;
 Store::~Store() {}
 
 // Set timeout function
-void Store::setTimeout(const std::chrono::seconds& timeoutSec) {
-  if (timeoutSec.count() == 0) {
-    timeout_ = kNoTimeout;
-  }
-  timeout_ = timeoutSec;
+void Store::setTimeout(const std::chrono::milliseconds& timeout) {
+  timeout_ = timeout;
 }
 
 } // namespace c10d

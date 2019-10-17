@@ -31,9 +31,8 @@ STRIP_FROM_PATH        = ../../..
 # What folders / files Doxygen should process.
 INPUT                  = ../../../aten/src/ATen/ATen.h \
                          ../../../aten/src/ATen/Backend.h \
-                         ../../../aten/src/ATen/core/Half.h \
+                         ../../../aten/src/ATen/core/ivalue.h \
                          ../../../aten/src/ATen/core/ScalarType.h \
-                         ../../../aten/src/ATen/core/Tensor.h \
                          ../../../aten/src/ATen/cuda/CUDAContext.h \
                          ../../../aten/src/ATen/cudnn/Descriptors.h \
                          ../../../aten/src/ATen/cudnn/Handles.h \
@@ -44,9 +43,11 @@ INPUT                  = ../../../aten/src/ATen/ATen.h \
                          ../../../aten/src/ATen/mkl/Descriptors.h \
                          ../../../aten/src/ATen/Scalar.h \
                          ../../../aten/src/ATen/TensorOptions.h \
+                         ../../../aten/src/ATen/core/Tensor.h \
                          ../../../build/aten/src/ATen/Functions.h \
-                         ../../../c10/Device.h \
-                         ../../../c10/DeviceType.h \
+                         ../../../c10/core/Device.h \
+                         ../../../c10/core/DeviceType.h \
+                         ../../../c10/util/Half.h \
                          ../../../c10/util/ArrayRef.h \
                          ../../../c10/util/Exception.h \
                          ../../../c10/util/Optional.h \
@@ -57,7 +58,6 @@ INPUT                  = ../../../aten/src/ATen/ATen.h \
                          ../../../torch/csrc/autograd/generated/variable_factories.h \
                          ../../../torch/csrc/jit/custom_operator.h \
                          ../../../torch/csrc/jit/import.h \
-                         ../../../torch/csrc/jit/ivalue.h \
                          ../../../torch/csrc/jit/script/module.h
 # Don't include .cpp files!
 FILE_PATTERNS          = *.h

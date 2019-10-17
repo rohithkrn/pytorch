@@ -5,7 +5,7 @@ import collections
 import caffe2.python.hypothesis_test_util as hu
 import hypothesis.strategies as st
 import numpy as np
-from caffe2.python import core, dyndep, workspace
+from caffe2.python import core, dyndep, utils, workspace
 from caffe2.quantization.server import utils as dnnlowp_utils
 from dnnlowp_test_utils import check_quantized_results_close
 from hypothesis import given
@@ -17,7 +17,7 @@ workspace.GlobalInit(["caffe2", "--caffe2_omp_num_threads=11"])
 
 class DNNLowPOpGroupNormTest(hu.HypothesisTestCase):
     @given(
-        N=st.integers(1, 4),
+        N=st.integers(0, 4),
         G=st.integers(2, 4),
         K=st.integers(2, 12),
         H=st.integers(4, 16),
@@ -46,7 +46,7 @@ class DNNLowPOpGroupNormTest(hu.HypothesisTestCase):
 
         X = np.random.rand(N, C, H, W).astype(np.float32) * 5.0 - 1.0
         if order == "NHWC":
-            X = np.transpose(X, [0, 2, 3, 1])
+            X = utils.NCHW2NHWC(X)
         gamma = np.random.rand(C).astype(np.float32) * 2.0 - 1.0
         beta = np.random.randn(C).astype(np.float32) - 0.5
 
@@ -80,7 +80,9 @@ class DNNLowPOpGroupNormTest(hu.HypothesisTestCase):
                 )
                 net.Proto().op.extend([int8_given_tensor_fill])
 
-                X_q_param = dnnlowp_utils.choose_quantization_params(X.min(), X.max())
+                X_min = 0 if X.size == 0 else X.min()
+                X_max = 0 if X.size == 0 else X.max()
+                X_q_param = dnnlowp_utils.choose_quantization_params(X_min, X_max)
                 int8_bias_tensor_fill = dnnlowp_utils.create_int8_bias_tensor_fill(
                     beta, "beta_q", X_q_param, gamma_q_param
                 )

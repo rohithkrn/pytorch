@@ -9,8 +9,6 @@
 #include <sstream>
 #include <thread>
 
-#include <gloo/transport/tcp/device.h>
-
 #include <c10d/FileStore.hpp>
 #include <c10d/ProcessGroupGloo.hpp>
 #include <c10d/test/TestUtils.hpp>
@@ -42,8 +40,8 @@ class SignalTest {
     // Use tiny timeout to make this test run fast
     ::c10d::ProcessGroupGloo::Options options;
     options.timeout = std::chrono::milliseconds(50);
-    ::gloo::transport::tcp::attr attr;
-    options.devices.push_back(::gloo::transport::tcp::CreateDevice(attr));
+    options.devices.push_back(
+        ::c10d::ProcessGroupGloo::createDeviceForHostname("127.0.0.1"));
 
     ::c10d::ProcessGroupGloo pg(store, rank, size, options);
 
@@ -127,9 +125,8 @@ class CollectiveTest {
     // Use tiny timeout to make this test run fast
     ::c10d::ProcessGroupGloo::Options options;
     options.timeout = std::chrono::milliseconds(50);
-
-    ::gloo::transport::tcp::attr attr;
-    options.devices.push_back(::gloo::transport::tcp::CreateDevice(attr));
+    options.devices.push_back(
+        ::c10d::ProcessGroupGloo::createDeviceForHostname("127.0.0.1"));
 
     pg_ = std::unique_ptr<::c10d::ProcessGroupGloo>(
         new ::c10d::ProcessGroupGloo(store, rank, size, options));
@@ -154,7 +151,7 @@ std::vector<std::vector<at::Tensor>> copyTensors(
   return outputs;
 }
 
-void testAllreduce(const std::string& path, const at::Backend b) {
+void testAllreduce(const std::string& path, const at::DeviceType b) {
   const auto size = 4;
   auto tests = CollectiveTest::initialize(path, size);
 
@@ -181,7 +178,7 @@ void testAllreduce(const std::string& path, const at::Backend b) {
   auto outputs = copyTensors(inputs);
   for (auto i = 0; i < size; i++) {
     auto& tensor = outputs[i][0];
-    auto data = tensor.data<float>();
+    auto data = tensor.data_ptr<float>();
     for (auto j = 0; j < tensor.numel(); j++) {
       if (data[j] != expected) {
         throw std::runtime_error("BOOM!");
@@ -190,7 +187,7 @@ void testAllreduce(const std::string& path, const at::Backend b) {
   }
 }
 
-void testBroadcast(const std::string& path, const at::Backend b) {
+void testBroadcast(const std::string& path, const at::DeviceType b) {
   const auto size = 2;
   const auto stride = 2;
   auto tests = CollectiveTest::initialize(path, size);
@@ -206,7 +203,7 @@ void testBroadcast(const std::string& path, const at::Backend b) {
         // This won't work if we ever support sparse CUDA
         at::OptionalDeviceGuard deviceGuard;
         for (auto l = 0; l < stride; l++) {
-          if (b == at::Backend::CUDA) {
+          if (b == at::DeviceType::CUDA) {
             deviceGuard.reset_device(at::Device(at::kCUDA, l));
           }
           inputs[k][l] = at::ones({16, 16}, b) * (k * stride + l);
@@ -234,7 +231,7 @@ void testBroadcast(const std::string& path, const at::Backend b) {
       for (auto k = 0; k < size; k++) {
         for (auto l = 0; l < stride; l++) {
           auto& tensor = outputs[k][l];
-          auto data = tensor.data<float>();
+          auto data = tensor.data_ptr<float>();
           for (auto n = 0; n < tensor.numel(); n++) {
             if (data[n] != expected) {
               throw std::runtime_error("BOOM!");
@@ -285,25 +282,25 @@ int main(int argc, char** argv) {
 
   {
     TemporaryFile file;
-    testAllreduce(file.path, at::Backend::CPU);
+    testAllreduce(file.path, at::DeviceType::CPU);
   }
 
 #ifdef USE_CUDA
   {
     TemporaryFile file;
-    testAllreduce(file.path, at::Backend::CUDA);
+    testAllreduce(file.path, at::DeviceType::CUDA);
   }
 #endif
 
   {
     TemporaryFile file;
-    testBroadcast(file.path, at::Backend::CPU);
+    testBroadcast(file.path, at::DeviceType::CPU);
   }
 
 #ifdef USE_CUDA
   {
     TemporaryFile file;
-    testBroadcast(file.path, at::Backend::CUDA);
+    testBroadcast(file.path, at::DeviceType::CUDA);
   }
 #endif
 

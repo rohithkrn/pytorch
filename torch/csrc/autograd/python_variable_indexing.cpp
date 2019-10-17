@@ -11,10 +11,12 @@
 #include <torch/csrc/utils/python_numbers.h>
 #include <torch/csrc/utils/tensor_new.h>
 #include <torch/csrc/jit/tracer.h>
+#include <torch/csrc/utils/tensor_types.h>
 
 #include <ATen/DeviceGuard.h>
 #include <ATen/ExpandUtils.h>
 #include <c10/core/TensorOptions.h>
+#include <ATen/core/LegacyTypeDispatch.h>
 
 #include <vector>
 #include <tuple>
@@ -47,7 +49,7 @@ static int64_t count_specified_dimensions(PyObject* index) {
     PyObject* obj = PyTuple_GET_ITEM(index, i); // NOLINT(cppcoreguidelines-pro-type-cstyle-cast)
     if (THPVariable_Check(obj)) {
       auto& var = reinterpret_cast<THPVariable*>(obj)->cdata;
-      if (var.type().scalarType() == kByte) {
+      if (var.scalar_type() == kByte || var.scalar_type() == kBool) {
         count += var.dim();
       } else {
         count++;
@@ -88,7 +90,7 @@ static Variable applySlice(const Variable& self, int64_t dim, PyObject* slice, b
   return self.slice(dim, start, stop, step);
 }
 
-static Variable applySelect(const Variable& self, int64_t dim, int64_t index) {
+static Variable applySelect(const Variable& self, int64_t dim, int64_t index, int64_t real_dim=0) {
   if (index == 0 && dim == 0 && self.dim() == 0) {
     throw IndexError(
         "invalid index of a 0-dim tensor. "
@@ -97,7 +99,7 @@ static Variable applySelect(const Variable& self, int64_t dim, int64_t index) {
   int64_t size = self.size(dim);
   if (index < -size || index >= size) {
     throw IndexError("index %lld is out of bounds for dimension %lld with size %lld",
-      index, dim, size);
+      index, real_dim, size);
   }
   // if the index is negative, do not normalize it because that would fix the index
   // on the current tensor size in the tracer.
@@ -105,22 +107,25 @@ static Variable applySelect(const Variable& self, int64_t dim, int64_t index) {
   return self.select(dim, index);
 }
 
-static Variable sequenceToVariable(const at::Type& type, PyObject* seq) {
-  auto& idx_type = type.toScalarType(kLong);
-  return torch::utils::legacy_new_from_data(idx_type, c10::nullopt, seq);
+static Variable sequenceToVariable(c10::TensorTypeId type_id, PyObject* seq) {
+  return torch::utils::indexing_tensor_from_data(type_id, kLong, c10::nullopt, seq);
 }
 
-static Variable valueToTensor(const at::Type & type, PyObject* value) {
+static Variable valueToTensor(c10::TensorOptions options, PyObject* value) {
   if (THPVariable_Check(value)) {
     return reinterpret_cast<THPVariable*>(value)->cdata;
   }
-  if (THPUtils_checkLong(value)) {
-    return at::scalar_tensor(Scalar(THPUtils_unpackLong(value)), type.options());
+  options = options.is_variable(true);
+  if (THPUtils_checkLong(value) || PyBool_Check(value)) {
+    return at::scalar_tensor(Scalar(THPUtils_unpackLong(value)), options);
   }
   if (PyFloat_Check(value)) {
-    return at::scalar_tensor(Scalar(THPUtils_unpackDouble(value)), type.options());
+    return at::scalar_tensor(Scalar(THPUtils_unpackDouble(value)), options);
   }
-  throw TypeError("can't assign a %s to a %s", Py_TYPE(value)->tp_name, type.toString());
+  throw TypeError(
+    "can't assign a %s to a %s",
+    Py_TYPE(value)->tp_name,
+    torch::utils::type_to_string(getNonVariableDeprecatedTypeProperties(options.backend(), typeMetaToScalarType(options.dtype()))).c_str());
 }
 
 static Variable boolToIndexingTensor(const Variable& self, bool value) {
@@ -152,7 +157,7 @@ static Variable applySlicing(const Variable& self, PyObject* index, variable_lis
   for (int64_t i = 0; i < size; i++) {
     PyObject* obj = PyTuple_GET_ITEM(index, i); // NOLINT(cppcoreguidelines-pro-type-cstyle-cast)
     if (THPUtils_checkLong(obj)) {
-      result = applySelect(result, dim, THPUtils_unpackLong(obj));
+      result = applySelect(result, dim, THPUtils_unpackLong(obj), i);
     } else if (PySlice_Check(obj)) {
       result = applySlice(result, dim, obj);
       dim++;
@@ -166,26 +171,32 @@ static Variable applySlicing(const Variable& self, PyObject* index, variable_lis
       handle_var(boolToIndexingTensor(result, obj == Py_True)); // NOLINT(cppcoreguidelines-pro-type-cstyle-cast)
     } else if (THPVariable_Check(obj)) {
       auto& var = THPVariable_Unpack(obj);
-      auto scalar_type = var.type().scalarType();
-      if (var.dim() == 0 && at::isIntegralType(scalar_type)) {
-        if (scalar_type != at::kByte) {
-          result = applySelect(result, dim, THPUtils_unpackLong(obj));
+      auto scalar_type = var.scalar_type();
+      if (var.dim() == 0 && at::isIntegralType(scalar_type, /*includeBool=*/true)) {
+        if (scalar_type != at::kByte && scalar_type != at::kBool) {
+          result = applySelect(result, dim, THPUtils_unpackLong(obj), i);
         } else {
           result = result.unsqueeze(dim);
-          handle_var(boolToIndexingTensor(result, var.item<uint8_t>() != 0));
+          if(scalar_type == at::kBool) {
+            handle_var(boolToIndexingTensor(result, var.item<bool>() != 0));
+          } else {
+            handle_var(boolToIndexingTensor(result, var.item<uint8_t>() != 0));
+          }
         }
       } else {
         handle_var(var);
       }
     } else if (PySequence_Check(obj)) {
-      handle_var(sequenceToVariable(self.type(), obj));
+      // TODO: Naughty naughty get out of jail free
+      // (Fixing this means I have to fix the call chain though :/)
+      handle_var(sequenceToVariable(legacyExtractTypeId(self), obj));
     } else {
       auto index = THPObjectPtr(PyNumber_Index(obj));
       if (!index) {
         PyErr_Clear();
         invalid_index(obj);
       }
-      result = applySelect(result, dim, THPUtils_unpackLong(index));
+      result = applySelect(result, dim, THPUtils_unpackLong(index), i);
     }
   }
   return result;
@@ -307,7 +318,7 @@ PyObject* THPVariable_getitem(PyObject* self, PyObject* index) {
 // To match numpy semantics:
 // As a special case for backwards compatibility,
 // strip away unit dimensions from the left of 'src'
-static IntList slicePrefix1sSize(IntList sizes) {
+static IntArrayRef slicePrefix1sSize(IntArrayRef sizes) {
   size_t first_non1_src = sizes.size();
   for (size_t i = 0; i < sizes.size(); ++i) {
     if (sizes[i] != 1) {
@@ -321,7 +332,7 @@ static IntList slicePrefix1sSize(IntList sizes) {
 
 static void copy_to(Variable dst, const Variable& src) {
   Tensor b_src;
-  IntList sliced_src_sizes = slicePrefix1sSize(src.sizes());
+  IntArrayRef sliced_src_sizes = slicePrefix1sSize(src.sizes());
   std::tie(b_src) = expand_inplace(dst, src.view(sliced_src_sizes), "setitem");
   dst.copy_(b_src);
 }
@@ -334,7 +345,13 @@ int THPVariable_setitem(PyObject* self, PyObject* index, PyObject* py_value) {
 
   auto& self_ = reinterpret_cast<THPVariable*>(self)->cdata;
   OptionalDeviceGuard device_guard(device_of(self_));
-  auto value = valueToTensor(self_.type(), py_value);
+  Variable value;
+  // TODO: This qint special case looks very suspicious...
+  if (isQIntType(self_.scalar_type())) {
+    value = valueToTensor(device(kCPU).dtype(kFloat), py_value);
+  } else {
+    value = valueToTensor(self_.options(), py_value);
+  }
 
   // handle simple types: integers, slices, ellipsis, bool
   if (index == Py_False) { // NOLINT(cppcoreguidelines-pro-type-cstyle-cast)
@@ -365,7 +382,7 @@ int THPVariable_setitem(PyObject* self, PyObject* index, PyObject* py_value) {
     return 0;
   }
 
-  IntList slicedValueSizes = slicePrefix1sSize(value.sizes());
+  IntArrayRef slicedValueSizes = slicePrefix1sSize(value.sizes());
   torch::autograd::Variable valuesSliced;
   if (!value.sizes().equals(slicedValueSizes)) {
     valuesSliced = value.view(slicedValueSizes);

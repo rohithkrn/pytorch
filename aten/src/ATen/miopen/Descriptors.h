@@ -13,6 +13,7 @@ inline int dataSize(miopenDataType_t dataType)
   switch (dataType) {
     case miopenHalf: return 2;
     case miopenFloat: return 4;
+    case miopenBFloat16: return 2;
     default: return 8;
   }
 }
@@ -89,7 +90,7 @@ public:
   }
 
   void set(const at::Tensor &t, size_t pad = 0);
-  void set(miopenDataType_t dataType, IntList sizes, IntList strides, size_t pad = 0);
+  void set(miopenDataType_t dataType, IntArrayRef sizes, IntArrayRef strides, size_t pad = 0);
 
   void print();
 
@@ -112,6 +113,7 @@ public:
 
 private:
   void set(miopenDataType_t dataType, int dim, int* size, int* stride) {
+    fixSizeOneDimStride(dim, size, stride);
     MIOPEN_CHECK(miopenSetTensorDescriptor(mut_desc(), dataType, dim, size, stride));
   }
 };
@@ -121,10 +123,22 @@ struct ConvolutionDescriptor
                       &miopenCreateConvolutionDescriptor,
                       &miopenDestroyConvolutionDescriptor>
 {
-  void set(miopenDataType_t dataType, int dim, int* pad, int* stride, int * upscale /* aka dilation */, int groups) {
-    MIOPEN_CHECK(miopenInitConvolutionDescriptor(mut_desc(), miopenConvolution, pad[0], pad[1], stride[0], stride[1], upscale[0], upscale[1]));
+  void set(miopenDataType_t dataType, miopenConvolutionMode_t c_mode,  int dim, int* pad, int* stride, int * upscale /* aka dilation */, int groups) {
+    MIOPEN_CHECK(miopenInitConvolutionDescriptor(mut_desc(), c_mode, pad[0], pad[1], stride[0], stride[1], upscale[0], upscale[1]));
     MIOPEN_CHECK(miopenSetConvolutionGroupCount(mut_desc(), groups));
   }
+};
+
+
+struct RNNDescriptor
+  : public Descriptor<miopenRNNDescriptor,
+                      &miopenCreateRNNDescriptor,
+                      &miopenDestroyRNNDescriptor>
+{
+    void set(int64_t hidden_size, int64_t num_layers, miopenRNNInputMode_t input_mode, miopenRNNDirectionMode_t direction, miopenRNNMode_t rnn_mode,
+              miopenRNNBiasMode_t bias_mode, miopenRNNAlgo_t algorithm, miopenDataType_t datatype) {
+      MIOPEN_CHECK(miopenSetRNNDescriptor(mut_desc(), hidden_size, num_layers, input_mode, direction, rnn_mode, bias_mode, algorithm, datatype));
+    }
 };
 
 union Constant
@@ -132,7 +146,7 @@ union Constant
   float f;
   double d;
   Constant(miopenDataType_t dataType, double value) {
-    if (dataType == miopenHalf || dataType == miopenFloat) {
+    if (dataType == miopenHalf || dataType == miopenFloat || dataType == miopenBFloat16) {
       f = static_cast<float>(value);
     } else {
       d = value;

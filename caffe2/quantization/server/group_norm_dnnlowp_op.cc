@@ -56,9 +56,9 @@ void GroupNormDNNLowPOp<T>::QuantizeGamma() {
       const int C = gamma.size();
       gamma_quantized_.resize(C);
       gamma_quantized_data_ = gamma_quantized_.data();
-      if (OperatorBase::InputIsType<int8::Int8TensorCPU>(GAMMA)) {
+      if (this->template InputIsType<int8::Int8TensorCPU>(GAMMA)) {
         const auto& gamma_int8 =
-            OperatorBase::Input<int8::Int8TensorCPU>(GAMMA);
+            this->template Input<int8::Int8TensorCPU>(GAMMA);
         auto& gamma_qparams = in_qparams_[GAMMA];
         gamma_qparams.scale = gamma_int8.scale;
         const T* gamma_data = gamma.template data<T>();
@@ -118,13 +118,18 @@ void GroupNormDNNLowPOp<T>::QuantizeBeta() {
     const auto& X_qparams = in_qparams_[INPUT];
     const auto& gamma_qparams = in_qparams_[GAMMA];
     auto& beta_qparams = in_qparams_[BETA];
-    if (OperatorBase::InputIsType<int8::Int8TensorCPU>(BETA)) {
-      const auto& beta_int8 = OperatorBase::Input<int8::Int8TensorCPU>(BETA);
+    if (this->template InputIsType<int8::Int8TensorCPU>(BETA)) {
+      const auto& beta_int8 = this->template Input<int8::Int8TensorCPU>(BETA);
       beta_qparams.scale = beta_int8.scale;
       beta_qparams.zero_point = beta_int8.zero_point;
-      CAFFE_ENFORCE_LE(
-          std::abs(beta_qparams.scale - X_qparams.scale * gamma_qparams.scale),
-          1e-4);
+      const auto& X = InputTensorCPU_(INPUT);
+      const int N = X.dim32(0);
+      if (N > 0) {
+        CAFFE_ENFORCE_LE(
+            std::abs(
+                beta_qparams.scale - X_qparams.scale * gamma_qparams.scale),
+            1e-4);
+      }
       CAFFE_ENFORCE_EQ(beta_qparams.zero_point, 0);
       beta_quantized_data_ = beta.template data<int32_t>();
       if (dequantize_output_) {
@@ -255,10 +260,16 @@ void GroupNormDNNLowPOp<T>::DequantizedGroupMomentsNCHW(
   const int inner_size = K * HxW;
   X_dequantized_.resize(size);
   fbgemm::Dequantize<T>(X, X_dequantized_.data(), size, in_qparams_[INPUT]);
-  const std::array<int, 2> dims = {outer_size, inner_size};
-  const int axis = 1;
+  const std::array<int, 2> X_dims = {outer_size, inner_size};
+  const std::array<int, 2> Y_dims = {outer_size, 1};
   math::Moments<float, CPUContext>(
-      2, dims.data(), 1, &axis, X_dequantized_.data(), mu, rsig, &context_);
+      2,
+      X_dims.data(),
+      Y_dims.data(),
+      X_dequantized_.data(),
+      mu,
+      rsig,
+      &context_);
   math::InvStd<float>(outer_size, epsilon_, rsig, rsig, &context_);
 }
 
@@ -276,13 +287,12 @@ void GroupNormDNNLowPOp<T>::DequantizedGroupMomentsNHWC(
   const int outer_size = N * G;
   X_dequantized_.resize(size);
   fbgemm::Dequantize<T>(X, X_dequantized_.data(), size, in_qparams_[INPUT]);
-  const std::array<int, 4> dims = {N, HxW, G, K};
-  const std::array<int, 2> axes = {1, 3};
+  const std::array<int, 4> X_dims = {N, HxW, G, K};
+  const std::array<int, 4> Y_dims = {N, 1, G, 1};
   math::Moments<float, CPUContext>(
       4,
-      dims.data(),
-      2,
-      axes.data(),
+      X_dims.data(),
+      Y_dims.data(),
       X_dequantized_.data(),
       mu,
       rsig,
@@ -295,7 +305,7 @@ bool GroupNormDNNLowPOp<T>::RunOnDeviceWithOrderNCHW() {
   const auto& X = InputTensorCPU_(INPUT);
   const int N = X.dim32(0);
   const int C = X.dim32(1);
-  const int HxW = X.size() / (N * C);
+  const int HxW = X.size_from_dim(2);
   const int G = group_;
   CAFFE_ENFORCE_EQ(C % G, 0);
   const int K = C / G;
@@ -307,6 +317,9 @@ bool GroupNormDNNLowPOp<T>::RunOnDeviceWithOrderNCHW() {
 
   if (dequantize_output_) {
     float* Y_data = Y->template mutable_data<float>();
+    if (N == 0) {
+      return true;
+    }
     mu_dequantized_.resize(N * G);
     rsig_dequantized_.resize(N * G);
     float* mu_data = mu_dequantized_.data();
@@ -330,6 +343,9 @@ bool GroupNormDNNLowPOp<T>::RunOnDeviceWithOrderNCHW() {
         N, C, HxW, X_dequantized_.data(), scale_data, bias_data, Y_data);
   } else {
     T* Y_data = GetQuantizedOutputData_();
+    if (N == 0) {
+      return true;
+    }
     mu_quantized_.resize(N * G);
     rsig_quantized_.resize(N * G);
     int32_t* mu_data = mu_quantized_.data();
@@ -363,7 +379,7 @@ bool GroupNormDNNLowPOp<T>::RunOnDeviceWithOrderNHWC() {
   const int ndim = X.dim();
   const int N = X.dim32(0);
   const int C = X.dim32(ndim - 1);
-  const int HxW = X.size() / (N * C);
+  const int HxW = X.size_between_dim(0, ndim - 1);
   const int G = group_;
   CAFFE_ENFORCE_EQ(C % G, 0);
   const int K = C / G;
@@ -375,6 +391,9 @@ bool GroupNormDNNLowPOp<T>::RunOnDeviceWithOrderNHWC() {
 
   if (dequantize_output_) {
     float* Y_data = Y->template mutable_data<float>();
+    if (N == 0) {
+      return true;
+    }
     mu_dequantized_.resize(N * G);
     rsig_dequantized_.resize(N * G);
     float* mu_data = mu_dequantized_.data();
@@ -398,6 +417,9 @@ bool GroupNormDNNLowPOp<T>::RunOnDeviceWithOrderNHWC() {
         N, C, HxW, X_dequantized_.data(), scale_data, bias_data, Y_data);
   } else {
     T* Y_data = GetQuantizedOutputData_();
+    if (N == 0) {
+      return true;
+    }
     mu_quantized_.resize(N * G);
     rsig_quantized_.resize(N * G);
     int32_t* mu_data = mu_quantized_.data();
