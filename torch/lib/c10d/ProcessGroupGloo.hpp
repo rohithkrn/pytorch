@@ -125,25 +125,14 @@ class ProcessGroupGloo : public ProcessGroup {
     std::vector<std::shared_ptr<::gloo::transport::Device>> devices;
     std::chrono::milliseconds timeout;
     int threads;
+
+    // This controls how many Gloo algorithm instances are created for
+    // a single identifying key. If you have many identical calls with
+    // tensors of identical size and need to parallelize, this should
+    // be greater than 1. More cache entries means more memory usage.
+    // The default value is 1.
+    int cacheNumAlgorithmEntries;
   };
-
-  // Helper functions to create a new device object.
-  // They are static functions on this class to keep them logically
-  // separate from the rest of the code base (e.g. torch/csrc/distributed).
-
-  // Create new device instance for specific interface.
-  static std::shared_ptr<::gloo::transport::Device> createDeviceForInterface(
-      const std::string& interface);
-
-  // Create new device instance for specific hostname or address.
-  static std::shared_ptr<::gloo::transport::Device> createDeviceForHostname(
-      const std::string& hostname);
-
-  // Create new device instance.
-  // It tries to resolve this machine's hostname and bind to that address.
-  // If that fails (i.e. the hostname doesn't resolve to an address), it
-  // falls back to binding to the loopback address.
-  static std::shared_ptr<::gloo::transport::Device> createDefaultDevice();
 
   explicit ProcessGroupGloo(
       const std::shared_ptr<Store>& store,
@@ -160,11 +149,6 @@ class ProcessGroupGloo : public ProcessGroup {
   std::shared_ptr<ProcessGroup::Work> allreduce(
       std::vector<at::Tensor>& tensors,
       const AllreduceOptions& opts = AllreduceOptions()) override;
-
-  std::shared_ptr<ProcessGroup::Work> allreduce_coalesced(
-      std::vector<at::Tensor>& tensors,
-      const AllreduceCoalescedOptions& opts =
-          AllreduceCoalescedOptions()) override;
 
   std::shared_ptr<ProcessGroup::Work> reduce(
       std::vector<at::Tensor>& tensors,
@@ -185,11 +169,6 @@ class ProcessGroupGloo : public ProcessGroup {
       std::vector<std::vector<at::Tensor>>& inputs,
       const ScatterOptions& opts = ScatterOptions()) override;
 
-  std::shared_ptr<ProcessGroup::Work> reduce_scatter(
-      std::vector<at::Tensor>& outputs,
-      std::vector<std::vector<at::Tensor>>& inputs,
-      const ReduceScatterOptions& opts = ReduceScatterOptions()) override;
-
   std::shared_ptr<ProcessGroup::Work> send(
       std::vector<at::Tensor>& tensors,
       int dstRank,
@@ -207,12 +186,10 @@ class ProcessGroupGloo : public ProcessGroup {
   std::shared_ptr<ProcessGroup::Work> barrier(
       const BarrierOptions& opts = BarrierOptions()) override;
 
+  std::unordered_map<int, int> getGroupRank() override;
+
  protected:
   std::unique_ptr<::gloo::rendezvous::Store> store_;
-
-  // Every Gloo context represents a set of connections to its peers.
-  // In order to use more than one device (or allow for parallelism on
-  // a single device), you need multiple contexts.
   std::vector<std::shared_ptr<::gloo::Context>> contexts_;
   std::vector<std::thread> threads_;
   bool stop_;
@@ -225,11 +202,6 @@ class ProcessGroupGloo : public ProcessGroup {
 
   // Returns next collective tag to use (uses collectiveCounter_).
   uint32_t nextTag();
-
-  // Returns the context to use for the specified tag.
-  // With `nextTag` returning an increasing number, this should lead
-  // to contexts being used in a round-robin fashion.
-  std::shared_ptr<::gloo::Context> getContext(uint32_t tag);
 
   // Entrypoint for worker threads.
   void runLoop(int workerIndex);

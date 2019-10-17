@@ -1,8 +1,6 @@
 #include <caffe2/ideep/ideep_utils.h>
 
-using namespace caffe2;
-
-namespace {
+namespace caffe2 {
 
 void momentum_sgd_update(
     const int N,
@@ -124,4 +122,4 @@ class IDEEPMomentumSGDUpdateOp final : public IDEEPOperator {
 REGISTER_IDEEP_OPERATOR(MomentumSGD, IDEEPMomentumSGDOp);
 REGISTER_IDEEP_OPERATOR(MomentumSGDUpdate, IDEEPMomentumSGDUpdateOp);
 
-} // namespace
+} // namespace caffe2

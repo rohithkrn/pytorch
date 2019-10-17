@@ -1,5 +1,4 @@
 #include <THC/THCTensorSort.cuh>
-#include <ATen/cuda/CUDAContext.h>
 
 void THCudaLongTensor_fillSliceWithIndex(THCState* state,
                                          THCudaLongTensor* t,
@@ -18,7 +17,7 @@ void THCudaLongTensor_fillSliceWithIndex(THCState* state,
     }
 
     int64_t maxThreads =
-      at::cuda::getCurrentDeviceProperties()->maxThreadsPerBlock;
+      THCState_getCurrentDeviceProperties(state)->maxThreadsPerBlock;
     int64_t numThreads = sliceSize;
     if (numThreads > maxThreads) {
       numThreads = maxThreads;

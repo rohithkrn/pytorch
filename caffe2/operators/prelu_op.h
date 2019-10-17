@@ -10,9 +10,8 @@ namespace caffe2 {
 template <typename T, class Context>
 class PReluOp final : public Operator<Context> {
  public:
-  template <class... Args>
-  explicit PReluOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...),
+  PReluOp(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<Context>(operator_def, ws),
         order_(StringToStorageOrder(
             this->template GetSingleArgument<string>("order", "NCHW"))) {}
 
@@ -27,9 +26,8 @@ class PReluOp final : public Operator<Context> {
 template <typename T, class Context>
 class PReluGradientOp final : public Operator<Context> {
  public:
-  template <class... Args>
-  explicit PReluGradientOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...),
+  PReluGradientOp(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<Context>(operator_def, ws),
         order_(StringToStorageOrder(
             this->template GetSingleArgument<string>("order", "NCHW"))) {}
   USE_OPERATOR_CONTEXT_FUNCTIONS;

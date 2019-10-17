@@ -9,16 +9,16 @@ namespace at { namespace native {
 using namespace at::sparse;
 
 SparseTensor& sparse_mask_out_cuda(SparseTensor& r, const Tensor& t, const SparseTensor& mask) {
-  TORCH_CHECK(mask.is_coalesced(), "sparse_mask: mask is uncoalesced");
-  TORCH_CHECK(mask.sizes().equals(t.sizes()), "sparse_mask: operands have incompatible sizes; self has size ",
+  AT_CHECK(mask.is_coalesced(), "sparse_mask: mask is uncoalesced");
+  AT_CHECK(mask.sizes().equals(t.sizes()), "sparse_mask: operands have incompatible sizes; self has size ",
       t.sizes(), " but mask has size ", mask.sizes());
-  TORCH_CHECK(t.is_cuda(), "sparse_mask: expected 'self' to be CUDA, but got CPU");
-  TORCH_CHECK(mask.is_cuda(), "sparse_mask: expected 'mask' to be CUDA, but got CPU");
-  TORCH_CHECK(r.is_cuda(), "sparse_mask: expected 'out' to be CUDA, but got CPU");
-  TORCH_CHECK(cuda::check_device({r, t, mask}),
+  AT_ASSERT(t.is_cuda());  // dispatch argument
+  AT_CHECK(mask.is_cuda(), "sparse_mask: expected 'mask' to be CUDA, but got CPU");
+  AT_CHECK(r.is_cuda(), "sparse_mask: expected 'out' to be CUDA, but got CPU");
+  AT_CHECK(cuda::check_device({r, t, mask}),
       "sparse_mask: arguments are located on different devices; self is on device ", t.get_device(),
       ", mask is on device ", mask.get_device(), ", out is on device ", r.get_device());
-  r.resize_as_(mask);
+  resize_as_sparse_(r, mask);
   if (mask._nnz() == 0) {
     return r.zero_();
   }
@@ -53,9 +53,9 @@ SparseTensor& sparse_mask_out_cuda(SparseTensor& r, const Tensor& t, const Spars
   return r;
 }
 
-SparseTensor sparse_mask_cuda(const Tensor& t, const SparseTensor& mask) {
+SparseTensor sparse_mask_cuda(const Tensor& t, SparseTensorRef mask) {
   SparseTensor r = at::empty({0}, t.options().layout(kSparse));
-  sparse_mask_out_cuda(r, t, mask);
+  sparse_mask_out_cuda(r, t, mask.tref);
   return r;
 }
 

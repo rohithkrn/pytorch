@@ -1,8 +1,6 @@
 #include <caffe2/ideep/ideep_utils.h>
 
-using namespace caffe2;
-
-namespace {
+namespace caffe2 {
 
 class IDEEPSigmoidOp final : public IDEEPOperator {
  public:
@@ -12,7 +10,7 @@ class IDEEPSigmoidOp final : public IDEEPOperator {
   IDEEPSigmoidOp(const OperatorDef& operator_def, Workspace* ws)
       : IDEEPOperator(operator_def, ws) {
   }
-  ~IDEEPSigmoidOp() override {}
+  virtual ~IDEEPSigmoidOp() {}
 
   bool RunOnDevice() override {
     const auto& X = Input(INPUT);
@@ -38,7 +36,7 @@ class IDEEPSigmoidGradientOp final : public IDEEPOperator {
   IDEEPSigmoidGradientOp(const OperatorDef& operator_def, Workspace* ws)
       : IDEEPOperator(operator_def, ws) {
   }
-  ~IDEEPSigmoidGradientOp() override {}
+  virtual ~IDEEPSigmoidGradientOp() {}
 
   bool RunOnDevice() override {
     const auto& Y = Input(OUTPUT);
@@ -59,4 +57,4 @@ class IDEEPSigmoidGradientOp final : public IDEEPOperator {
 REGISTER_IDEEP_OPERATOR(Sigmoid, IDEEPSigmoidOp);
 REGISTER_IDEEP_OPERATOR(SigmoidGradient, IDEEPSigmoidGradientOp);
 
-} // namespace
+} // namespace caffe2

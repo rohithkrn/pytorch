@@ -6,12 +6,7 @@
 #include <stdexcept>
 
 namespace c10 {
-class intrusive_ptr_target;
-namespace raw {
-  namespace weak_intrusive_ptr {
-    inline void incref(intrusive_ptr_target* self);
-  }
-}
+
 /**
  * intrusive_ptr<T> is an alternative to shared_ptr<T> that has better
  * performance because it does the refcounting intrusively
@@ -67,7 +62,6 @@ class C10_API intrusive_ptr_target {
   friend class intrusive_ptr;
   template <typename T, typename NullType>
   friend class weak_intrusive_ptr;
-  friend inline void raw::weak_intrusive_ptr::incref(intrusive_ptr_target* self);
 
  protected:
   // protected destructor. We never want to destruct intrusive_ptr_target*
@@ -78,15 +72,15 @@ class C10_API intrusive_ptr_target {
 // We also have to disable -Wunknown-warning-option and -Wpragmas, because
 // some other compilers don't know about -Wterminate or -Wexceptions and
 // will show a warning about unknown warning options otherwise.
-#if defined(_MSC_VER) && !defined(__clang__)
-#  pragma warning(push)
-#  pragma warning(disable: 4297) // function assumed not to throw an exception but does
-#else
-#  pragma GCC diagnostic push
-#  pragma GCC diagnostic ignored "-Wpragmas"
-#  pragma GCC diagnostic ignored "-Wunknown-warning-option"
-#  pragma GCC diagnostic ignored "-Wterminate"
-#  pragma GCC diagnostic ignored "-Wexceptions"
+#ifdef _MSC_VER
+#  pragma warning(push)  
+#  pragma warning(disable: 4297) // function assumed not to throw an exception but does  
+#else  
+#  pragma GCC diagnostic push  
+#  pragma GCC diagnostic ignored "-Wpragmas"  
+#  pragma GCC diagnostic ignored "-Wunknown-warning-option"  
+#  pragma GCC diagnostic ignored "-Wterminate"  
+#  pragma GCC diagnostic ignored "-Wexceptions"  
 #endif
     AT_ASSERTM(
         refcount_.load() == 0,
@@ -94,10 +88,10 @@ class C10_API intrusive_ptr_target {
     AT_ASSERTM(
         weakcount_.load() == 0,
         "Tried to destruct an intrusive_ptr_target that still has weak_intrusive_ptr to it");
-#if defined(_MSC_VER) && !defined(__clang__)
-#  pragma warning(pop)
-#else
-#  pragma GCC diagnostic pop
+#ifdef _MSC_VER
+#  pragma warning(pop)  
+#else  
+#  pragma GCC diagnostic pop  
 #endif
   }
 
@@ -188,14 +182,14 @@ class intrusive_ptr final {
 
   void reset_() noexcept {
     if (target_ != NullType::singleton() && --target_->refcount_ == 0) {
-      // justification for const_cast: release_resources is basically a destructor
-      // and a destructor always mutates the object, even for const objects.
-      const_cast<c10::guts::remove_const_t<TTarget>*>(target_)->release_resources();
-
       // See comment above about weakcount. As long as refcount>0,
       // weakcount is one larger than the actual number of weak references.
       // So we need to decrement it here.
-      if (--target_->weakcount_ == 0) {
+      auto weak_count = --target_->weakcount_;
+      // justification for const_cast: release_resources is basically a destructor
+      // and a destructor always mutates the object, even for const objects.
+      const_cast<c10::guts::remove_const_t<TTarget>*>(target_)->release_resources();
+      if (weak_count == 0) {
         delete target_;
       }
     }
@@ -277,11 +271,19 @@ class intrusive_ptr final {
     return target_;
   }
 
-  TTarget& operator*() const noexcept {
+  const TTarget& operator*() const noexcept {
     return *target_;
   }
 
-  TTarget* operator->() const noexcept {
+  TTarget& operator*() noexcept {
+    return *target_;
+  }
+
+  const TTarget* operator->() const noexcept {
+    return target_;
+  }
+
+  TTarget* operator->() noexcept {
     return target_;
   }
 
@@ -359,21 +361,6 @@ class intrusive_ptr final {
     ++result.target_->weakcount_;
 
     return result;
-  }
-
-  /**
-   * Turn a **non-owning raw pointer** to an intrusive_ptr.
-   *
-   * This method is potentially dangerous (as it can mess up refcount).
-   */
-  static intrusive_ptr unsafe_reclaim_from_nonowning(TTarget* raw_ptr) {
-    // See Note [Stack allocated intrusive_ptr_target safety]
-    AT_ASSERTM(
-        raw_ptr == NullType::singleton() || raw_ptr->refcount_.load() > 0,
-        "intrusive_ptr: Can only reclaim pointers that are owned by someone");
-    auto ptr = reclaim(raw_ptr); // doesn't increase refcount
-    ptr.retain_();
-    return ptr;
   }
 };
 
@@ -589,7 +576,7 @@ class weak_intrusive_ptr final {
         // Return nullptr.
         return intrusive_ptr<TTarget, NullType>(NullType::singleton());
       }
-    } while (!target_->refcount_.compare_exchange_weak(refcount, refcount + 1));
+    } while (target_->refcount_.compare_exchange_weak(refcount, refcount + 1));
     return intrusive_ptr<TTarget, NullType>(target_);
   }
 
@@ -726,7 +713,10 @@ namespace intrusive_ptr {
 namespace weak_intrusive_ptr {
 
   inline void incref(weak_intrusive_ptr_target* self) {
-    ++self->weakcount_;
+    auto wptr = c10::weak_intrusive_ptr<weak_intrusive_ptr_target>::reclaim(self);
+    auto wptr_copy = wptr;
+    wptr_copy.release();
+    wptr.release();
   }
 
   inline void decref(weak_intrusive_ptr_target* self) {

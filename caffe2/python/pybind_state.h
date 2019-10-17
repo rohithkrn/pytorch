@@ -35,7 +35,7 @@
 
 #else
 
-struct PyArrayObject; // Forward declaring PyArrayObject for safety
+struct PyArrayObject;  // Forward declaring PyArrayObject for safety
 
 #endif // USE_NUMPY
 
@@ -65,11 +65,8 @@ class C10_EXPORT BlobFetcherBase {
 class BlobFeederBase {
  public:
   virtual ~BlobFeederBase();
-  virtual void Feed(
-      const DeviceOption& option,
-      PyArrayObject* array,
-      Blob* blob,
-      bool in_place = false) = 0;
+  virtual void
+  Feed(const DeviceOption& option, PyArrayObject* array, Blob* blob, bool in_place = false) = 0;
 };
 
 C10_DECLARE_TYPED_REGISTRY(
@@ -165,7 +162,7 @@ class TensorFetcher : public BlobFetcherBase {
     }
 
     if (result.copied) {
-      // TODO: use CUDAGuard here instead of context and employ explicit sync
+      // TODO: use DeviceGuard here instead of context and employ explicit sync
       // copy
       auto context = CreateContext(tensor.GetDeviceType());
       context->CopyBytesToCPU(tensor.nbytes(), tensor.raw_data(), outPtr);
@@ -181,17 +178,10 @@ class TensorFetcher : public BlobFetcherBase {
 template <class Context>
 class TensorFeeder : public BlobFeederBase {
  public:
-  Tensor FeedTensor(const DeviceOption& option, PyArrayObject* original_array) {
-    Tensor out;
-    FeedTensor(option, original_array, &out, false);
-    return out;
-  }
-
-  void FeedTensor(
+  Tensor FeedTensor(
       const DeviceOption& option,
       PyArrayObject* original_array,
-      Tensor* out,
-      bool in_place) {
+      Tensor* out = nullptr) {
 #ifdef USE_NUMPY
     PyArrayObject* array = PyArray_GETCONTIGUOUS(original_array);
     auto g = MakeGuard([&]() { Py_XDECREF(array); });
@@ -213,9 +203,11 @@ class TensorFeeder : public BlobFeederBase {
       dims.push_back(npy_dims[i]);
     }
 
-    Tensor& tensor = *out;
+    Tensor tensor;
+    bool in_place = out != nullptr;
     if (in_place) {
-      tensor.Resize(dims);
+      out->Resize(dims);
+      tensor = *out;
     }
     // Now, copy the data to the tensor.
     switch (npy_type) {
@@ -235,8 +227,7 @@ class TensorFeeder : public BlobFeederBase {
                 PyBytes_AsStringAndSize(input[i], &str, &strSize) != -1,
                 "Had a PyBytes object but cannot convert it to a string.");
           } else if (PyUnicode_Check(input[i])) { // string
-            str =
-                const_cast<char*>(PyUnicode_AsUTF8AndSize(input[i], &strSize));
+            str = const_cast<char*>(PyUnicode_AsUTF8AndSize(input[i], &strSize));
             CAFFE_ENFORCE(
                 str,
                 "Had a PyUnicode object but cannot convert it to a string.");
@@ -271,8 +262,10 @@ class TensorFeeder : public BlobFeederBase {
             tensor.raw_mutable_data());
     }
     context.FinishDeviceComputation();
+    return tensor;
 #else
     CAFFE_THROW("Caffe2 compiled without NumPy support.");
+    return caffe2::Tensor(); // will not reach here
 #endif // USE_NUMPY
   }
 
@@ -285,8 +278,7 @@ class TensorFeeder : public BlobFeederBase {
       FeedTensor(
           option,
           original_array,
-          BlobGetMutableTensor(blob, OptionToDevice(option).type()),
-          true);
+          BlobGetMutableTensor(blob, OptionToDevice(option).type()));
     } else {
       blob->Reset<Tensor>(new Tensor(FeedTensor(option, original_array)));
     }
@@ -305,7 +297,6 @@ const Func& getGradientFunc(const std::string& token);
 
 } // namespace python_detail
 
-// TODO: Remove template?
 template <class Context, bool use_dlpack>
 class PythonOpBase : public Operator<Context> {
  public:
@@ -323,6 +314,10 @@ class PythonOpBase : public Operator<Context> {
     using namespace python_detail;
     auto pickled = OperatorBase::template GetSingleArgument<std::string>(
         pickled_builder_arg_name, "");
+    auto forced_cpu_outputs_arg =
+        OperatorBase::template GetRepeatedArgument<int>("forced_cpu_outputs");
+    forced_cpu_outputs_.insert(
+        forced_cpu_outputs_arg.begin(), forced_cpu_outputs_arg.end());
     CAFFE_ENFORCE(
         !pickled.empty() || !token_.empty(),
         "PythonOp requires either pickled_builder or token arg.");
@@ -331,27 +326,10 @@ class PythonOpBase : public Operator<Context> {
       try {
         auto pickle =
             py::reinterpret_steal<py::object>(PyImport_ImportModule("pickle"));
-
         CAFFE_ENFORCE(pickle);
         auto loads = pickle.attr("loads").cast<py::object>();
         CAFFE_ENFORCE(loads);
-        py::tuple builder_call;
-        try {
-          builder_call = loads(py::bytes(pickled)).cast<py::tuple>();
-        } catch (const py::error_already_set& e) {
-#if PY_MAJOR_VERSION >= 3
-          LOG(INFO) << "Cannot unpickle python operator: " << e.what();
-          LOG(INFO) << "Try latin1 encoding for python3 run";
-          // to use the `_a` literal for arguments
-          using namespace pybind11::literals;
-          builder_call = loads(py::bytes(pickled), "encoding"_a = "latin1")
-                             .template cast<py::tuple>();
-#else
-          // for py2, simply re-throw the exception, as there is no encoding
-          // argument for pickle.loads
-          throw;
-#endif
-        }
+        auto builder_call = loads(py::bytes(pickled)).cast<py::tuple>();
         CAFFE_ENFORCE(builder_call);
         CAFFE_ENFORCE_EQ(py::len(builder_call), 3);
         auto func = builder_call[0].cast<py::object>();
@@ -389,17 +367,28 @@ class PythonOpBase : public Operator<Context> {
         const auto* blob = &InputBlob(i);
         // Allow CPU tensors in addition to operator context's tensors
         py::object py_obj;
-        CAFFE_ENFORCE(
-            BlobIsTensorType(*blob, CPU),
-            "We only allow input blob to be CPU Tensor");
-        if (use_dlpack) {
-          DLPackWrapper<CPUContext> wrapper(
-              const_cast<Tensor*>(&(BlobGetTensor(*blob, CPU))), cpu_option);
-          // copy wrapper
-          py_obj = py::cast(wrapper, py::return_value_policy::copy);
+        if (blob->template IsType<Tensor>()) {
+          if (use_dlpack) {
+            DLPackWrapper<CPUContext> wrapper(
+                const_cast<Tensor*>(&blob->template Get<Tensor>()), cpu_option);
+            // copy wrapper
+            py_obj = py::cast(wrapper, py::return_value_policy::copy);
+          } else {
+            py_obj = py::cast(
+                &blob->template Get<Tensor>(),
+                py::return_value_policy::reference);
+          }
         } else {
-          py_obj = py::cast(
-              &(BlobGetTensor(*blob, CPU)), py::return_value_policy::reference);
+          if (use_dlpack) {
+            DLPackWrapper<Context> wrapper(
+                const_cast<Tensor*>(&blob->template Get<Tensor>()),
+                this->device_option());
+            py_obj = py::cast(wrapper, py::return_value_policy::copy);
+          } else {
+            py_obj = py::cast(
+                &blob->template Get<Tensor>(),
+                py::return_value_policy::reference);
+          }
         }
         inputs.push_back(py_obj);
       }
@@ -415,19 +404,43 @@ class PythonOpBase : public Operator<Context> {
         // GPUFallbackOp also allows keeping some of the output blobs on CPU
         // by specifying their indices explicitly in template parameters.
 
-        // PythonDLPack op allows working CPU blobs only through DLPack tensors.
-        // We don't have use cases of CUDA version yet, but if there is such use
-        // case, we can use GPUFallbackOp to enable it.
+        // PythonDLPack op allows working with CUDA and CPU blobs directly
+        // through DLPack tensors. In order to properly setup mapping we need
+        // to know in advance a type (CUDA or CPU) of an output blob.
+        // Output blob might not be initialized yet, so by default we treat
+        // output blobs as having the same type as operator's context.
+        // This can be overwritten though forced_cpu_outputs argument
+
+        // make sure output blob is initialized before creating the binding
+        if (forced_cpu_outputs_.count(i)) {
+          BlobGetMutableTensor(blob, Context::GetDeviceType());
+        } else {
+          BlobGetMutableTensor(blob, Context::GetDeviceType());
+        }
 
         py::object py_obj;
-        if (use_dlpack) {
-          DLPackWrapper<CPUContext> wrapper(
-              BlobGetMutableTensor(blob, CPU), cpu_option);
-          py_obj = py::cast(wrapper, py::return_value_policy::copy);
+        if (blob->template IsType<Tensor>()) {
+          if (use_dlpack) {
+            DLPackWrapper<CPUContext> wrapper(
+                BlobGetMutableTensor(blob, Context::GetDeviceType()),
+                cpu_option);
+            py_obj = py::cast(wrapper, py::return_value_policy::copy);
+          } else {
+            py_obj = py::cast(
+                BlobGetMutableTensor(blob, Context::GetDeviceType()),
+                py::return_value_policy::reference);
+          }
         } else {
-          py_obj = py::cast(
-              BlobGetMutableTensor(blob, CPU),
-              py::return_value_policy::reference);
+          if (use_dlpack) {
+            DLPackWrapper<Context> wrapper(
+                BlobGetMutableTensor(blob, Context::GetDeviceType()),
+                this->device_option());
+            py_obj = py::cast(wrapper, py::return_value_policy::copy);
+          } else {
+            py_obj = py::cast(
+                BlobGetMutableTensor(blob, Context::GetDeviceType()),
+                py::return_value_policy::reference);
+          }
         }
         outputs.push_back(py_obj);
       }
@@ -460,6 +473,8 @@ class PythonOpBase : public Operator<Context> {
  protected:
   virtual const python_detail::Func& getFunc(const std::string& token) = 0;
   Workspace* ws_;
+  // output indices forced to be on CPU
+  std::unordered_set<int> forced_cpu_outputs_;
 
  private:
   const std::string token_;

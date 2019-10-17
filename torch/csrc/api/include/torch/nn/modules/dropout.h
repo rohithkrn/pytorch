@@ -1,11 +1,8 @@
 #pragma once
 
 #include <torch/nn/cloneable.h>
-#include <torch/nn/options/dropout.h>
 #include <torch/nn/pimpl.h>
 #include <torch/types.h>
-
-#include <torch/csrc/WindowsTorchApiMacro.h>
 
 #include <cstddef>
 #include <vector>
@@ -13,11 +10,20 @@
 namespace torch {
 namespace nn {
 
+/// Options for `Dropout` and `FeatureDropout`.
+struct TORCH_API DropoutOptions {
+  /* implicit */ DropoutOptions(double rate = 0.5);
+  /// The probability with which a particular component of the input is set to
+  /// zero.
+  /// Changes to this parameter at runtime are effective.
+  TORCH_ARG(double, rate);
+};
+
 namespace detail {
 template <typename Derived>
 class DropoutImplBase : public torch::nn::Cloneable<Derived> {
  public:
-  explicit DropoutImplBase(const DropoutOptions& options_ = DropoutOptions());
+  explicit DropoutImplBase(DropoutOptions options_ = DropoutOptions());
 
   void reset() override;
 
@@ -32,14 +38,10 @@ class DropoutImplBase : public torch::nn::Cloneable<Derived> {
 /// about the exact semantics of this module.
 class TORCH_API DropoutImpl : public detail::DropoutImplBase<DropoutImpl> {
  public:
-  explicit DropoutImpl(const DropoutOptions& options_ = DropoutOptions());
-
+  using detail::DropoutImplBase<DropoutImpl>::DropoutImplBase;
   /// During training, applies a noise mask to the input tensor.
   /// During evaluation, applies an identity function.
   Tensor forward(const Tensor& input);
-
-  /// Pretty prints the `Dropout` module into the given `stream`.
-  void pretty_print(std::ostream& stream) const override;
 };
 
 /// Applies spatial [Dropout](https://arxiv.org/abs/1207.0580) to inputs with
@@ -51,17 +53,12 @@ class TORCH_API DropoutImpl : public detail::DropoutImplBase<DropoutImpl> {
 /// [Dropout3d](https://pytorch.org/docs/stable/nn.html#torch.nn.Dropout3d) for
 /// 3-D features. This `FeatureDropout` module can instead deal with both 2-D
 /// and 3-D features.
-class TORCH_API FeatureDropoutImpl
-    : public detail::DropoutImplBase<FeatureDropoutImpl> {
+class TORCH_API FeatureDropoutImpl : public detail::DropoutImplBase<FeatureDropoutImpl> {
  public:
-  explicit FeatureDropoutImpl(const DropoutOptions& options_ = DropoutOptions());
-
+  using detail::DropoutImplBase<FeatureDropoutImpl>::DropoutImplBase;
   /// During training, applies a noise mask to the input tensor.
   /// During evaluation, applies an identity function.
   Tensor forward(const Tensor& input);
-
-  /// Pretty prints the `FeatureDropout` module into the given `stream`.
-  void pretty_print(std::ostream& stream) const override;
 };
 
 /// A `ModuleHolder` subclass for `DropoutImpl`.

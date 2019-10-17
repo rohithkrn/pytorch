@@ -16,9 +16,8 @@ class LocallyConnectedOp final : public ConvPoolOpBase<Context> {
  public:
   USE_CONV_POOL_BASE_FUNCTIONS(Context);
 
-  template <class... Args>
-  explicit LocallyConnectedOp(Args&&... args)
-      : ConvPoolOpBase<Context>(std::forward<Args>(args)...) {
+  LocallyConnectedOp(const OperatorDef& operator_def, Workspace* ws)
+      : ConvPoolOpBase<Context>(operator_def, ws) {
     // Since this is the default locally connected implementation, we will
     // use CAFFE_ENFORCE instead of OPERATOR_NEEDS_FEATURE.
     CAFFE_ENFORCE(
@@ -69,9 +68,8 @@ class LocallyConnectedGradientOp final : public ConvPoolOpBase<Context> {
  public:
   USE_CONV_POOL_BASE_FUNCTIONS(Context);
 
-  template <class... Args>
-  explicit LocallyConnectedGradientOp(Args&&... args)
-      : ConvPoolOpBase<Context>(std::forward<Args>(args)...),
+  LocallyConnectedGradientOp(const OperatorDef& operator_def, Workspace* ws)
+      : ConvPoolOpBase<Context>(operator_def, ws),
         OP_SINGLE_ARG(bool, "no_bias", no_bias_, false) {
     CAFFE_ENFORCE(
         !(no_bias_ && OutputSize() == 3),

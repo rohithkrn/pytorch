@@ -9,7 +9,7 @@
 
 #include <thrust/device_ptr.h>
 #include <thrust/scan.h>
-#if CUDA_VERSION >= 7000 || defined __HIP_PLATFORM_HCC__
+#if CUDA_VERSION >= 7000
 #include <thrust/system/cuda/execution_policy.h>
 #endif
 

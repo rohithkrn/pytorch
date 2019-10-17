@@ -16,52 +16,37 @@ def load_derivatives(path, declarations):
         definitions = yaml.load(f, Loader=YamlLoader)
 
     declarations_by_signature = defaultdict(list)
-    declarations_by_schema = dict()
     for declaration in declarations:
         declarations_by_signature[get_signature(declaration)].append(declaration)
-        if declaration['schema_string']:
-            assert declaration['schema_string'] not in declarations_by_schema
-            declarations_by_schema[declaration['schema_string']] = declaration
 
-    differentiability_infos = [
-        process_definition(defn, declarations_by_signature, declarations_by_schema)
+    autograd_functions = [
+        process_definition(defn, declarations_by_signature)
         for defn in definitions]
-
-    autograd_functions = [d['autograd_fn'] for d in differentiability_infos if d['autograd_fn'] is not None]
     ensure_unique_names(autograd_functions)
-    match_declarations_with_differentiability_info(declarations, differentiability_infos)
+    match_declarations_with_autograd_functions(declarations, autograd_functions)
 
     return autograd_functions
 
 
-def create_differentiability_info(signature, non_differentiable_arg_names,
-                                  output_differentiability,
-                                  autograd_fn):
-    return {
-        'signature': signature,
-        'non_differentiable_arg_names': non_differentiable_arg_names,
-        'output_differentiability': output_differentiability,
-        'autograd_fn': autograd_fn,
-    }
-
-
 # How do you feel about pasting declaration inside autograd function...
-def create_autograd_function(name, derivatives, args_with_derivatives,
-                             declaration):
+def create_autograd_function(name, derivatives, args_with_gradients, signature,
+                             declaration, output_differentiability):
     op = to_camel_case(name) + 'Backward'
     op = op.replace('ForwardBackward', 'Backward')
     return {
         'name': name,
         'op': op,
         'declaration': declaration,
-        'args_with_derivatives': args_with_derivatives,
+        'args_with_gradients': args_with_gradients,
+        'signature': signature,
         'derivatives': derivatives,
         'saved_inputs': all_saved_variables(derivatives, 'saved_inputs'),
         'saved_outputs': all_saved_variables(derivatives, 'saved_outputs'),
+        'output_differentiability': output_differentiability,
     }
 
 
-def create_derivative(arguments, returns, name, formula, var_names):
+def create_derivative(declaration, formula, var_names):
     def transform_return(r):
         # In-place functions take in and return self. Call the modified version
         # "output" so that it can be referred to in derivative definitions.
@@ -70,17 +55,18 @@ def create_derivative(arguments, returns, name, formula, var_names):
             r['name'] = 'result'
         return r
 
-    returns = [transform_return(r) for r in returns]
+    returns = [transform_return(r) for r in declaration['returns']]
+    arguments = declaration['arguments']
     formula, saved_inputs = saved_variables(formula, arguments)
     formula, saved_outputs = saved_variables(formula, returns)
 
-    # Check that the referenced derivatives in the formula are in bounds
+    # Check that the referenced gradients in the formula are in bounds
     for i in used_gradient_indices(formula):
-        if i >= len(returns):
+        if i >= len(declaration['returns']):
             raise RuntimeError(
                 "Out of bounds grads access: derivative formula for {} "
                 "used grads[{}], but the forward only returns {} outputs."
-                .format(name, i, len(returns)))
+                .format(declaration['name'], i, len(declaration['returns'])))
 
     return {
         'formula': formula,
@@ -90,7 +76,7 @@ def create_derivative(arguments, returns, name, formula, var_names):
     }
 
 
-def process_definition(defn, declarations_by_signature, declarations_by_schema):
+def process_definition(defn, declarations_by_signature):
     """Processes a single entry `defn` in derivatives.yaml"""
 
     def canonical_declaration(declarations, name):
@@ -111,7 +97,7 @@ def process_definition(defn, declarations_by_signature, declarations_by_schema):
 
     def check_grad_usage(defn_name, declaration, derivatives):
         """
-        Check for some subtle mistakes one might make when writing derivatives.
+        Check for some subtle mistakes one might make when writing gradients.
         These mistakes will compile, but will be latent until a function is
         used with double backwards.
         """
@@ -144,86 +130,74 @@ def process_definition(defn, declarations_by_signature, declarations_by_schema):
                                "declaration.".format(defn_name))
 
     def set_up_derivatives(defn_name, defn, declaration):
-        # Determine the set of inputs which have derivatives
-        args_with_derivatives_set = set()
+        # Determine the set of inputs which have gradients
+        args_with_gradients_set = set()
         for raw_names in defn:
-            args_with_derivatives_set |= set(split_names(raw_names))
+            args_with_gradients_set |= set(split_names(raw_names))
 
         # Next, let us determine the list of inputs in order.
-        args_with_derivatives = []
+        args_with_gradients = []
         for arg in declaration['arguments']:
-            if arg['name'] not in args_with_derivatives_set:
+            if arg['name'] not in args_with_gradients_set:
                 continue
-            args_with_derivatives.append(arg)
+            args_with_gradients.append(arg)
 
         # Set up the derivative information
         derivatives = []
-        non_differentiable_arg_names = []
         for raw_names in sorted(defn.keys()):
             formula = defn[raw_names]
             names = split_names(raw_names)
-            derivative = create_derivative(declaration['arguments'], declaration['returns'],
-                                           declaration['name'], formula, names)
-            if formula.lower().strip() == 'non_differentiable':
-                assert not sum([type(var_name) == list
-                                for var_name in derivative['var_names']]), \
-                    "Variable names associated to a formula should be a flat list"
-                non_differentiable_arg_names += derivative['var_names']
-            else:
-                derivatives.append(derivative)
-        args_with_derivatives = list(filter(lambda x: x['name'] not in non_differentiable_arg_names,
-                                            args_with_derivatives))
+            derivatives.append(create_derivative(declaration, formula, names))
 
         # Test to see if the use of 'grads' makes sense.
         check_grad_usage(defn_name, declaration, derivatives)
 
-        return derivatives, args_with_derivatives, non_differentiable_arg_names
+        return derivatives, args_with_gradients
 
     def unzip(xs):
         return zip(*xs)
 
     # NB: Removes 'name' from defn dictionary
-    specification = defn.pop('name')
-    defn_name, params = split_name_params(specification)
+    defn_name, params = split_name_params(defn.pop('name'))
     # NB: Removes 'output_differentiability' from defn dictionary
     #     `None` means all differentiable.
     output_differentiability = defn.pop('output_differentiability', None)
+    param_types, param_names = unzip([p.split(' ') for p in params if p != '*'])
 
-    schema_declaration = declarations_by_schema.get('aten::' + specification)
-    if not schema_declaration:
-        avail = [k.replace('aten::', '') for k, v in declarations_by_schema.items()
-                 if k.replace('aten::', '').startswith(defn_name + '(') and len(v) > 0]
-        raise RuntimeError('could not find ATen declaration for schema: {} '
-                           '.  Available signatures:\n{}'.format(specification, '\n'.join(avail)))
+    if 'grad_input_mask' in param_names:
+        raise RuntimeError("Signature for {} has an argument named grad_input_mask, "
+                           "but this name would be shadowed by our codegen. "
+                           "Please use a different name in Declarations.cwrap."
+                           .format(defn_name))
+    signature = '{}({})'.format(defn_name, ', '.join(param_types))
 
-    # now map this to the legacy schema; this isn't technically necessary, but we'd need some logic here
-    # to map in-place schemas to the out-of-place variants.
-    signature = get_signature(schema_declaration)
     declarations = declarations_by_signature[signature]
     if len(declarations) == 0:
         avail = [k for k, v in declarations_by_signature.items()
                  if k.startswith(defn_name + '(') and len(v) > 0]
-        raise RuntimeError('could not find ATen declaration for legacy signature: {} '
-                           'corresponding to schema {}.  Please report a bug to PyTorch. '
-                           'Available signatures: {}'.format(signature, specification, ', '.join(avail)))
-
+        raise RuntimeError('no ATen declaration found for: {}.  '
+                           'Available signatures: {}'.format(signature, ', '.join(avail)))
     canonical = canonical_declaration(declarations, defn_name)
-    if 'grad_input_mask' in (a['name'] for a in canonical['arguments']):
-        raise RuntimeError("Schema for {} has an argument named grad_input_mask, "
-                           "but this name would be shadowed by our codegen. "
-                           "Please use a different name in native_functions.yaml."
-                           .format(defn_name))
 
-    derivatives, args_with_derivatives, non_differentiable_arg_names = set_up_derivatives(defn_name, defn, canonical)
-    autograd_fn = None
+    # TODO: Check the types line up
+    if len(param_names) != len(canonical['args']):
+        raise RuntimeError('Signature for {} has {} arguments ({}), but '
+                           'Declarations.yaml records {} arguments ({})'
+                           .format(defn_name,
+                                   len(param_names),
+                                   ', '.join(param_names),
+                                   len(canonical['args']),
+                                   ', '.join(canonical['args'])))
+    for i, (x, y) in enumerate(zip(param_names, canonical['args'])):
+        if x != y:
+            raise RuntimeError('Argument {} of {} has different names in '
+                               'derivatives.yaml ({}) and '
+                               'Declarations.yaml ({})'
+                               .format(i, defn_name, x, y))
 
-    # only create an autograd function if we are actually going to calculate a derivative
-    if len(args_with_derivatives) > 0:
-        autograd_fn = create_autograd_function(defn_name, derivatives, args_with_derivatives,
-                                               canonical)
-
-    return create_differentiability_info(signature, non_differentiable_arg_names,
-                                         output_differentiability, autograd_fn)
+    derivatives, args_with_gradients = set_up_derivatives(defn_name, defn, canonical)
+    return create_autograd_function(defn_name, derivatives, args_with_gradients,
+                                    signature, canonical, output_differentiability)
 
 
 def ensure_unique_names(autograd_functions):
@@ -277,7 +251,7 @@ def saved_variables(formula, args):
         # replace self.sizes() with self_sizes
         (r'{}.sizes\(\)', {
             'suffix': '_sizes',
-            'type': 'IntArrayRef',
+            'type': 'IntList',
         }),
         # replace zeros_like(self) with self_info
         (r'zeros_like\({}\)', {
@@ -305,10 +279,6 @@ def saved_variables(formula, args):
         (r'TensorGeometry\({}\)', {
             'suffix': '_geometry',
             'type': 'TensorGeometry',
-        }),
-        (r'{}.scalar_type\(\)', {
-            'suffix': '_scalar_type',
-            'type': 'ScalarType',
         }),
     ]
 
@@ -362,28 +332,24 @@ def to_camel_case(name):
     return ''.join([p.title() for p in name.split('_')])
 
 
-def match_declarations_with_differentiability_info(declarations, differentiability_infos):
-    """Sets the "derivative" and "output_differentiability" key on declarations
-    to matching differentiability info
+def match_declarations_with_autograd_functions(declarations, autograd_functions):
+    """Sets the "derivative" key on declarations to matching autograd functions
 
     In-place functions will use the out-of-place derivative definition if there
     is no in-place specific derivative.
     """
 
-    infos_by_signature = {f['signature']: f for f in differentiability_infos}
+    functions_by_signature = {f['signature']: f for f in autograd_functions}
 
-    def find_info(declaration):
+    def find_function(declaration):
         signature = get_signature(declaration)
-        if signature in infos_by_signature:
-            return infos_by_signature[signature]
+        if signature in functions_by_signature:
+            return functions_by_signature[signature]
 
         # if there is no exact match look for the out-of-place signature.
         # i.e mul() for mul_() or mul_out()
         signature = get_signature(declaration, use_base_variant=True)
-        return infos_by_signature.get(signature)
+        return functions_by_signature.get(signature)
 
     for declaration in declarations:
-        info = find_info(declaration)
-        declaration['derivative'] = info['autograd_fn'] if info else None
-        declaration['non_differentiable_arg_names'] = info['non_differentiable_arg_names'] if info else []
-        declaration['output_differentiability'] = info['output_differentiability'] if info else None
+        declaration['derivative'] = find_function(declaration)

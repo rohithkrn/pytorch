@@ -12,9 +12,8 @@ class KeySplitOp : public Operator<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
 
-  template <class... Args>
-  explicit KeySplitOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...),
+  KeySplitOp(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<Context>(operator_def, ws),
         categorical_limit_(
             this->template GetSingleArgument<int>("categorical_limit", 0)) {
     CAFFE_ENFORCE_GT(categorical_limit_, 0);

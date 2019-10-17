@@ -1,8 +1,3 @@
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-from __future__ import unicode_literals
-
 import torch
 from torch.autograd import Function
 from torch.nn import Module, Parameter
@@ -24,10 +19,7 @@ class TestVerify(TestCase):
             if str(e):
                 # substring a small piece of string because the exact message
                 # depends on system's formatting settings
-                # self.assertExpected(str(e)[:60])
-                # NB: why we comment out the above check? because numpy keeps
-                # changing the error format, and we have to keep updating the
-                # expect files let's relax this constraint
+                self.assertExpected(str(e)[:60])
                 return
             else:
                 raise

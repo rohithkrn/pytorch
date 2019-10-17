@@ -2,8 +2,7 @@
 
 // ${generated_comment}
 
-#include <torch/csrc/utils/auto_gil.h>
-#include <torch/csrc/utils/cuda_lazy_init.h>
+#include "torch/csrc/utils/auto_gil.h"
 
 #include <ATen/ATen.h>
 
@@ -15,8 +14,9 @@ namespace torch { namespace autograd {
 using at::Tensor;
 using at::Scalar;
 using at::TensorList;
-using at::IntArrayRef;
+using at::IntList;
 using at::Generator;
+using at::SparseTensorRef;
 using at::Storage;
 
 ${py_method_dispatch}

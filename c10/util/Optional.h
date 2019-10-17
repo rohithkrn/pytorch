@@ -150,8 +150,8 @@ inline constexpr typename std::remove_reference<T>::type&& constexpr_move(
 
 namespace detail_ {
 
-// VS doesn't handle constexpr well, so we need to skip these stuff.
-#if (defined _MSC_VER)
+// VS 2015 doesn't handle constexpr well, so we need to skip these stuff.
+#if (defined _MSC_VER) && (_MSC_VER <= 1900)
 template <typename T>
 T* static_addressof(T& ref) {
   return std::addressof(ref);
@@ -516,7 +516,7 @@ class optional : private OptionalBase<T> {
   // 20.5.4.4, Swap
   void swap(optional<T>& rhs) noexcept(
       std::is_nothrow_move_constructible<T>::value&& noexcept(
-          std::swap(std::declval<T&>(), std::declval<T&>()))) {
+          swap(std::declval<T&>(), std::declval<T&>()))) {
     if (initialized() == true && rhs.initialized() == false) {
       rhs.initialize(std::move(**this));
       clear();
@@ -597,9 +597,7 @@ class optional : private OptionalBase<T> {
     return contained_val();
   }
 
-  // This might be constexpr, but MSVC+cuda don't like combination of constexpr
-  // and throw.
-  T const& value() const {
+  constexpr T const& value() const {
     return initialized()
         ? contained_val()
         : (throw bad_optional_access("bad optional access"), contained_val());

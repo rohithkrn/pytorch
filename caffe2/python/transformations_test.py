@@ -108,6 +108,14 @@ class TestTransformations(tu.TestCase):
         assert net.Proto().op[0].output[0] != net.Proto().op[0].input[0]
         assert net.Proto().op[1].output[0] != net.Proto().op[1].input[0]
 
+    def test_transformer_SinkMaxPool(self):
+        net = self._base_test_net()
+        net.MaxPool(["Y"], ["Y1"], kernel=3)
+        net.Relu(["Y1"], ["Y1"])
+        transformer.SinkMaxPool(net)
+        assert tu.str_compare(net.Proto().op[1].type, "Relu")
+        assert tu.str_compare(net.Proto().op[2].type, "MaxPool")
+
     @given(
         size=st.integers(7, 10),
         input_channels=st.integers(1, 10),
@@ -320,15 +328,16 @@ class TestTransformations(tu.TestCase):
             atol=1e-04
         )
 
-    def test_converterDontEnforceUnusedInputs(self):
+    def test_converterEnforceUnusedInputs(self):
         net = core.Net("net")
         net.Relu(["X"], ["Y"])
         net.Proto().external_input.extend(["fake"])
         # This should now work
         transformer.AddNNPACK(net)  # just testing the converter
 
-    def test_converterDontEnforceUnusedOutputs(self):
+    def test_converterEnforceUnusedOutputs(self):
         net = core.Net("net")
         net.Relu(["X"], ["Y"])
         net.Proto().external_output.extend(["fake"])
-        transformer.AddNNPACK(net)  # just testing the converter
+        with self.assertRaises(Exception):
+            transformer.AddNNPACK(net)  # just testing the converter

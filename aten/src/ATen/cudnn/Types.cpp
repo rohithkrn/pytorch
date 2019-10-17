@@ -5,15 +5,15 @@
 namespace at { namespace native {
 
 cudnnDataType_t getCudnnDataType(const at::Tensor& tensor) {
-  if (tensor.scalar_type() == at::kFloat) {
+  if (tensor.type().scalarType() == at::kFloat) {
     return CUDNN_DATA_FLOAT;
-  } else if (tensor.scalar_type() == at::kDouble) {
+  } else if (tensor.type().scalarType() == at::kDouble) {
     return CUDNN_DATA_DOUBLE;
-  } else if (tensor.scalar_type() == at::kHalf) {
+  } else if (tensor.type().scalarType() == at::kHalf) {
     return CUDNN_DATA_HALF;
   }
   std::string msg("getCudnnDataType() not supported for ");
-  msg += toString(tensor.scalar_type());
+  msg += toString(tensor.type().scalarType());
   throw std::runtime_error(msg);
 }
 

@@ -18,7 +18,6 @@
 #include <c10/util/SmallVector.h>
 #include <c10/util/C++17.h>
 #include <c10/util/Exception.h>
-#include <c10/util/Deprecated.h>
 
 #include <array>
 #include <iterator>
@@ -43,7 +42,6 @@ class ArrayRef final {
   using iterator = const T*;
   using const_iterator = const T*;
   using size_type = size_t;
-  using value_type = T;
 
   using reverse_iterator = std::reverse_iterator<iterator>;
 
@@ -81,13 +79,9 @@ class ArrayRef final {
       : Data(Vec.data()), Length(Vec.size()) {}
 
   /// Construct an ArrayRef from a std::vector.
-  // The enable_if stuff here makes sure that this isn't used for std::vector<bool>,
-  // because ArrayRef can't work on a std::vector<bool> bitfield.
   template <typename A>
   /* implicit */ ArrayRef(const std::vector<T, A>& Vec)
-      : Data(Vec.data()), Length(Vec.size()) {
-    static_assert(!std::is_same<T, bool>::value, "ArrayRef<bool> cannot be constructed from a std::vector<bool> bitfield.");
-  }
+      : Data(Vec.data()), Length(Vec.size()) {}
 
   /// Construct an ArrayRef from a std::array
   template <size_t N>
@@ -100,7 +94,7 @@ class ArrayRef final {
 
   /// Construct an ArrayRef from a std::initializer_list.
   /* implicit */ constexpr ArrayRef(const std::initializer_list<T>& Vec)
-      : Data(std::begin(Vec) == std::end(Vec) ? static_cast<T*>(nullptr) : std::begin(Vec)),
+      : Data(Vec.begin() == Vec.end() ? static_cast<T*>(nullptr) : Vec.begin()),
         Length(Vec.size()) {}
 
   /// @}
@@ -145,14 +139,14 @@ class ArrayRef final {
   }
 
   /// front - Get the first element.
-  C10_CPP14_HOST_CONSTEXPR const T& front() const {
-    TORCH_CHECK(!empty(), "ArrayRef: attempted to access front() of empty list");
+  AT_CPP14_CONSTEXPR const T& front() const {
+    AT_CHECK(!empty(), "ArrayRef: attempted to access front() of empty list");
     return Data[0];
   }
 
   /// back - Get the last element.
-  C10_CPP14_HOST_CONSTEXPR const T& back() const {
-    TORCH_CHECK(!empty(), "ArrayRef: attempted to access back() of empty list");
+  AT_CPP14_CONSTEXPR const T& back() const {
+    AT_CHECK(!empty(), "ArrayRef: attempted to access back() of empty list");
     return Data[Length - 1];
   }
 
@@ -163,8 +157,8 @@ class ArrayRef final {
 
   /// slice(n, m) - Chop off the first N elements of the array, and keep M
   /// elements in the array.
-  C10_CPP14_HOST_CONSTEXPR ArrayRef<T> slice(size_t N, size_t M) const {
-    TORCH_CHECK(
+  AT_CPP14_CONSTEXPR ArrayRef<T> slice(size_t N, size_t M) const {
+    AT_CHECK(
         N + M <= size(),
         "ArrayRef: invalid slice, N = ",
         N,
@@ -188,8 +182,8 @@ class ArrayRef final {
   }
 
   /// Vector compatibility
-  C10_CPP14_HOST_CONSTEXPR const T& at(size_t Index) const {
-    TORCH_CHECK(
+  AT_CPP14_CONSTEXPR const T& at(size_t Index) const {
+    AT_CHECK(
         Index < Length,
         "ArrayRef: invalid index Index = ",
         Index,
@@ -252,29 +246,25 @@ bool operator!=(c10::ArrayRef<T> a1, c10::ArrayRef<T> a2) {
 }
 
 template <typename T>
-bool operator==(const std::vector<T>& a1, c10::ArrayRef<T> a2) {
+bool operator==(std::vector<T> a1, c10::ArrayRef<T> a2) {
   return c10::ArrayRef<T>(a1).equals(a2);
 }
 
 template <typename T>
-bool operator!=(const std::vector<T>& a1, c10::ArrayRef<T> a2) {
+bool operator!=(std::vector<T> a1, c10::ArrayRef<T> a2) {
   return !c10::ArrayRef<T>(a1).equals(a2);
 }
 
 template <typename T>
-bool operator==(c10::ArrayRef<T> a1, const std::vector<T>& a2) {
+bool operator==(c10::ArrayRef<T> a1, std::vector<T> a2) {
   return a1.equals(c10::ArrayRef<T>(a2));
 }
 
 template <typename T>
-bool operator!=(c10::ArrayRef<T> a1, const std::vector<T>& a2) {
+bool operator!=(c10::ArrayRef<T> a1, std::vector<T> a2) {
   return !a1.equals(c10::ArrayRef<T>(a2));
 }
 
-using IntArrayRef = ArrayRef<int64_t>;
-
-// This alias is deprecated because it doesn't make ownership
-// semantics obvious.  Use IntArrayRef instead!
-C10_DEFINE_DEPRECATED_USING(IntList, ArrayRef<int64_t>)
+using IntList = ArrayRef<int64_t>;
 
 } // namespace c10

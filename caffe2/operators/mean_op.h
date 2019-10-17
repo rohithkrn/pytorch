@@ -32,7 +32,7 @@ class MeanOp final : public Operator<Context> {
     for (int i = 1; i < InputSize(); ++i) {
       if (output->sizes() != Input(i).sizes()) {
         CAFFE_THROW(
-            "Check failed: output->sizes() == Input(i).sizes().",
+            "Check failed: output->dims() == Input(i).dims().",
             "Description: Input #",
             i,
             ", input dimension:",
@@ -79,9 +79,8 @@ class MeanGradientOp : public Operator<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
 
-  template <class... Args>
-  explicit MeanGradientOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...) {}
+  MeanGradientOp(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<Context>(operator_def, ws) {}
 
   template <typename T>
   bool DoRunWithType() {

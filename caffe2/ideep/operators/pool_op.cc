@@ -1,8 +1,6 @@
 #include <caffe2/ideep/operators/conv_pool_base_op.h>
 
-using namespace caffe2;
-
-namespace {
+namespace caffe2 {
 
 class IDEEPPoolOp final : public IDEEPConvPoolOpBase {
  public:
@@ -10,7 +8,9 @@ class IDEEPPoolOp final : public IDEEPConvPoolOpBase {
   USE_IDEEP_CONV_POOL_BASE_FUNCTIONS();
 
   IDEEPPoolOp(const OperatorDef& operator_def, Workspace* ws)
-      : IDEEPConvPoolOpBase(operator_def, ws) {
+      : IDEEPConvPoolOpBase(operator_def, ws),
+        training_mode_(
+            OperatorBase::GetSingleArgument<int>("training_mode", 1)) {
     CAFFE_ENFORCE(
         (dilation_h() == 1) && (dilation_w() == 1),
         "Pooling op does not support dilation right now.");
@@ -20,10 +20,6 @@ class IDEEPPoolOp final : public IDEEPConvPoolOpBase {
               pad_l() < kernel_w() && pad_r() < kernel_w(),
           "Pad should be smaller than kernel.");
     }
-
-    bool training_mode = OperatorBase::GetSingleArgument<int>("training_mode", 1);
-    pk_ = training_mode ? iprop::forward_training : iprop::forward_inference;
-
     // Figure out the pooling descriptor.
     if (operator_def.type().substr(0, 7) == "MaxPool") {
       algo_ = ialgo::pooling_max;
@@ -33,29 +29,24 @@ class IDEEPPoolOp final : public IDEEPConvPoolOpBase {
       LOG(FATAL) << "Unsupported pooling method: " << operator_def.type();
     }
   }
-  ~IDEEPPoolOp() override {}
+  virtual ~IDEEPPoolOp() {}
 
   bool RunOnDeviceWithOrderNCHW() override {
     auto& X = Input(INPUT);
     auto* Y = Output(OUTPUT);
     auto Y_dims = CalcOutputDims(X, X.get_dim(1));
+    mkldnn::prop_kind pk = training_mode_ ?
+      mkldnn::prop_kind::forward_training : mkldnn::prop_kind::forward_inference;
 
-    if (cached_X_descriptor_ != X.get_descriptor()) {
-      op_key_.clear();
-      cached_X_descriptor_ = X.dup_descriptor();
-    }
-
-    ideep::pooling_forward::compute(op_key_, X, Y_dims, *Y,
-        stride_, kernel_, pad_tl(), pad_br(), algo_, pk_);
+    ideep::pooling_forward::compute(X, Y_dims, *Y,
+        stride_, kernel_, pad_tl(), pad_br(), algo_, pk);
 
     return true;
   }
 
  private:
-  iprop pk_;
   ialgo algo_;
-  ikey op_key_;
-  itensor::descriptor cached_X_descriptor_;
+  bool training_mode_;
 
   INPUT_TAGS(INPUT);
   OUTPUT_TAGS(OUTPUT);
@@ -86,7 +77,7 @@ class IDEEPPoolGradientOp final : public IDEEPConvPoolOpBase {
       LOG(FATAL) << "Unsupported pooling method: " << operator_def.type();
     }
   }
-  ~IDEEPPoolGradientOp() override {}
+  virtual ~IDEEPPoolGradientOp() {}
 
   bool RunOnDeviceWithOrderNCHW() override {
     const auto& X = Input(INPUT);
@@ -113,4 +104,4 @@ REGISTER_IDEEP_OPERATOR(MaxPoolGradient, IDEEPPoolGradientOp);
 REGISTER_IDEEP_OPERATOR(AveragePool, IDEEPPoolOp);
 REGISTER_IDEEP_OPERATOR(AveragePoolGradient, IDEEPPoolGradientOp);
 
-} // namespace
+} // namespace caffe2

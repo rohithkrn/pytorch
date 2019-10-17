@@ -15,9 +15,8 @@ template <class Context>
 class SparseToDenseMaskBase : public Operator<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
-  template <class... Args>
-  explicit SparseToDenseMaskBase(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...) {
+  SparseToDenseMaskBase(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<Context>(operator_def, ws) {
     std::vector<int64_t> mask =
         this->template GetRepeatedArgument<int64_t>("mask");
     featuresCount_ = mask.size();
@@ -43,7 +42,7 @@ class SparseToDenseMaskBase : public Operator<Context> {
 
   std::unordered_map<int64_t, int> sparse_;
   std::vector<int> dense_;
-  size_t featuresCount_;
+  int featuresCount_;
 
   inline int getFeatureIdx(int64_t id) const {
     if (id >= kMaxDenseSize) {
@@ -63,13 +62,13 @@ template <class Context>
 class SparseToDenseMaskOp : public SparseToDenseMaskBase<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
-  template <class... Args>
-  explicit SparseToDenseMaskOp(Args&&... args)
-      : SparseToDenseMaskBase<Context>(std::forward<Args>(args)...) {
-    returnPresenceMask_ =
-        this->template GetSingleArgument<bool>("return_presence_mask", false);
-    maxSkippedRows_ = this->template GetSingleArgument<int32_t>(
-        "max_skipped_indices", kMaxSkippedSparseIndices);
+  SparseToDenseMaskOp(const OperatorDef& operator_def, Workspace* ws)
+      : SparseToDenseMaskBase<Context>(operator_def, ws) {
+    returnPresenceMask_ = this->template GetSingleArgument<bool>(
+        "return_presence_mask", false);
+    maxSkippedSparseIndices_ =
+        this->template GetSingleArgument<int32_t>(
+            "max_skipped_indices", kMaxSkippedSparseIndices);
   }
 
   bool RunOnDevice() override {
@@ -97,7 +96,7 @@ class SparseToDenseMaskOp : public SparseToDenseMaskBase<Context> {
     int64_t block_size = default_value.numel();
     size_t block_nbytes = default_value.nbytes();
 
-    const size_t cols = this->featuresCount_;
+    const int cols = this->featuresCount_;
     int rows = -1;
     int32_t sparse_indices_length = sparse_indices.dim32(0);
     const int32_t* lengths_vec = nullptr;
@@ -150,13 +149,14 @@ class SparseToDenseMaskOp : public SparseToDenseMaskBase<Context> {
 
     int64_t offset = 0;
     for (int r = 0; r < rows; r++) {
-      bool skippedSparseIndex = false;
       for (int c = 0; c < lengths_vec[r]; c++) {
         const auto sparse_index = sparse_indices_vec[offset + c];
         if (sparse_index < 0 ||
             sparse_index >= std::numeric_limits<TInd>::max()) {
-          skippedSparseIndex = true;
-          LOG(WARNING) << "Skipping invalid sparse index: " << sparse_index;
+          CAFFE_ENFORCE_LT(
+              ++skippedSparseIndices_,
+              maxSkippedSparseIndices_,
+              "Too many sparse indices skipped");
           continue;
         }
         int idx = this->getFeatureIdx(sparse_index);
@@ -171,11 +171,6 @@ class SparseToDenseMaskOp : public SparseToDenseMaskBase<Context> {
           }
         }
       }
-      skippedRows_ += skippedSparseIndex;
-      CAFFE_ENFORCE_LT(
-          skippedRows_,
-          maxSkippedRows_,
-          "Too many rows with invalid sparse indices skipped");
       offset += lengths_vec[r];
     }
 
@@ -183,11 +178,11 @@ class SparseToDenseMaskOp : public SparseToDenseMaskBase<Context> {
   }
 
  private:
-  static const uint32_t kMaxSkippedSparseIndices = 50;
+  static const uint32_t kMaxSkippedSparseIndices = 5;
 
   bool returnPresenceMask_;
-  uint32_t maxSkippedRows_ = 0;
-  uint32_t skippedRows_ = 0;
+  uint32_t maxSkippedSparseIndices_ = 0;
+  uint32_t skippedSparseIndices_ = 0;
 
   INPUT_TAGS(INDICES, VALUES, DEFAULT, LENGTHS);
   OUTPUT_TAGS(OUTPUTVALUE, PRESENCEMASK);
@@ -197,9 +192,8 @@ template <class Context>
 class SparseToDenseMaskGradientOp : public SparseToDenseMaskBase<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
-  template <class... Args>
-  explicit SparseToDenseMaskGradientOp(Args&&... args)
-      : SparseToDenseMaskBase<Context>(std::forward<Args>(args)...) {}
+  SparseToDenseMaskGradientOp(const OperatorDef& operator_def, Workspace* ws)
+      : SparseToDenseMaskBase<Context>(operator_def, ws) {}
 
   bool RunOnDevice() override {
     return DispatchHelper<TensorTypes<int32_t, int64_t>>::call(
@@ -215,7 +209,7 @@ class SparseToDenseMaskGradientOp : public SparseToDenseMaskBase<Context> {
     int64_t block_size = gradient_output.size_from_dim(1);
     size_t block_nbytes = gradient_output.itemsize() * block_size;
 
-    const size_t cols = this->featuresCount_;
+    const int cols = this->featuresCount_;
     int rows = -1;
     int iter_offset = 1;
     int32_t default_length = sparse_indices.dim32(0);

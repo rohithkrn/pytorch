@@ -4,7 +4,6 @@
 
 namespace caffe2 {
 
-class Workspace;
 namespace {
 
 void enforceIsTensor(Workspace* ws, const std::string& name) {
@@ -58,10 +57,9 @@ bool Predictor::operator()(const TensorList& inputs, TensorList* outputs) {
       inputs.size() <=
       static_cast<unsigned>(config_.predict_net->external_input_size()));
   for (size_t i = 0; i < inputs.size(); ++i) {
-    // This is evil and shares the same underlying tensor
     BlobSetTensor(
         getBlob(config_.ws.get(), config_.predict_net->external_input(i)),
-        inputs[i].UnsafeSharedInstance());
+        inputs[i]);
   }
 
   if (!config_.ws->RunNet(config_.predict_net->name())) {
@@ -69,9 +67,8 @@ bool Predictor::operator()(const TensorList& inputs, TensorList* outputs) {
   }
   outputs->clear();
   for (size_t i = 0; i < config_.predict_net->external_output_size(); ++i) {
-    outputs->emplace_back(
-        getTensor(config_.ws.get(), config_.predict_net->external_output(i))
-            .UnsafeSharedInstance());
+    outputs->push_back(
+        getTensor(config_.ws.get(), config_.predict_net->external_output(i)));
   }
   return true;
 }
@@ -88,10 +85,7 @@ bool Predictor::run_map_workspace(const TensorMap& inputs) {
           "Input can't be found: ",
           input.first);
     }
-    // This is evil and shares the same underlying tensor
-    BlobSetTensor(
-        getBlob(config_.ws.get(), input.first),
-        input.second.UnsafeSharedInstance());
+    BlobSetTensor(getBlob(config_.ws.get(), input.first), input.second);
   }
 
   return config_.ws->RunNet(config_.predict_net->name());
@@ -104,8 +98,7 @@ bool Predictor::operator()(const TensorMap& inputs, TensorList* outputs) {
   outputs->clear();
   for (size_t i = 0; i < config_.predict_net->external_output_size(); ++i) {
     outputs->push_back(
-        getTensor(config_.ws.get(), config_.predict_net->external_output(i))
-            .UnsafeSharedInstance());
+        getTensor(config_.ws.get(), config_.predict_net->external_output(i)));
   }
   return true;
 }
@@ -116,9 +109,7 @@ bool Predictor::operator()(const TensorMap& inputs, TensorMap* outputs) {
   }
 
   for (const std::string& outputName : output_names()) {
-    outputs->emplace(
-        outputName,
-        getTensor(config_.ws.get(), outputName).UnsafeSharedInstance());
+    outputs->emplace(outputName, getTensor(config_.ws.get(), outputName));
   }
   return true;
 }

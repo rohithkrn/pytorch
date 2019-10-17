@@ -12,9 +12,8 @@ template <typename T, class Context>
 class ThresholdedReluOp final : public Operator<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
-  template <class... Args>
-  explicit ThresholdedReluOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...) {
+  ThresholdedReluOp(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<Context>(operator_def, ws) {
     alpha_ = this->template GetSingleArgument<T>("alpha", 1.0);
   }
 
@@ -28,9 +27,8 @@ template <typename T, class Context>
 class ThresholdedReluGradientOp final : public Operator<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
-  template <class... Args>
-  explicit ThresholdedReluGradientOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...) {
+  ThresholdedReluGradientOp(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<Context>(operator_def, ws) {
     alpha_ = this->template GetSingleArgument<T>("alpha", 1.0);
   }
 

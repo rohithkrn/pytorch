@@ -13,8 +13,9 @@ namespace int8 {
 
 class Int8SigmoidOp final : public Operator<CPUContext> {
  public:
-  explicit Int8SigmoidOp(const OperatorDef& operator_def, Workspace* ws)
-      : Operator<CPUContext>(operator_def, ws), ws_(ws) {}
+  Int8SigmoidOp(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<CPUContext>(operator_def, ws),
+        ws_(ws) {}
 
   ~Int8SigmoidOp() {
     if (this->qnnpackOperator_ != nullptr) {
@@ -54,7 +55,6 @@ class Int8SigmoidOp final : public Operator<CPUContext> {
         static_cast<uint8_t>(Y_zero_point), Y_scale,
         0 /* output min */,
         255 /* output max */,
-        0 /* flags */,
         &qnnpackOperator_);
       CAFFE_ENFORCE(
           createStatus == qnnp_status_success,

@@ -2,8 +2,6 @@
 #define THC_GENERIC_FILE "THC/generic/THCTensorTopK.cu"
 #else
 
-#include <c10/macros/Macros.h>
-
 void THCTensor_(topk)(THCState* state,
                       THCTensor *topK,
                       THCudaLongTensor *indices,
@@ -68,6 +66,12 @@ void THCTensor_(topk)(THCState* state,
     RUN_DIR(INDEX_T, -1);                       \
   }
 
+#ifdef __HIP_PLATFORM_HCC__
+#define TOPK_WARP_SIZE 64
+#else
+#define TOPK_WARP_SIZE 32
+#endif
+
 #define RUN_T(INDEX_T)                                                  \
   TensorInfo<scalar_t, INDEX_T> inputInfo =                                 \
     getTensorInfo<scalar_t, THCTensor, INDEX_T>(state, input);              \
@@ -101,7 +105,7 @@ void THCTensor_(topk)(THCState* state,
     THError("Slice to sort is too large");                              \
   }                                                                     \
                                                                         \
-  dim3 block(std::min(THCRoundUp(sliceSize, (int64_t) C10_WARP_SIZE), (int64_t) 1024)); \
+  dim3 block(std::min(THCRoundUp(sliceSize, (int64_t) TOPK_WARP_SIZE), (int64_t) 1024)); \
                                                                         \
   /* This is used as a template parameter to calculate indices. */      \
   /* We only specialize it if all collapsed dim sizes are the */        \
@@ -129,26 +133,19 @@ void THCTensor_(topk)(THCState* state,
 #undef RUN_DIM
 #undef RUN_DIR
 #undef RUN_K
+#undef TOPK_WARP_SIZE
 
   // Sort the results if the user wants them sorted, since our
   // selection routine does not ensure sorting
   if (sorted) {
     // FIXME: the k/v inplace sort along slice only works for size <=
     // 2048 at the moment
-    // Workaround:
-    // CUDA 8 uses more shared memory than 7.5 for bitonicSortKVInPlace,
-    // and so for the double word types,
-    // we get "too many resources requested for launch" in the 2048 case
-#if CUDA_VERSION >= 8000
-#if defined(THC_REAL_IS_DOUBLE) || defined(THC_REAL_IS_LONG)
-    int maxSliceSize = 1024;
+#ifdef __HIP_PLATFORM_HCC__
+    // TODO bitonicSortKVInPlace hangs on ROCm currently.
+    if (0) {
 #else
-    int maxSliceSize = 2048;
+    if (sliceSize <= 2048) {
 #endif
-#else
-    int maxSliceSize = 2048;
-#endif
-    if (sliceSize <= maxSliceSize) {
       // This avoids any memory allocations and performs all sorting
       // work inplace along the slice
       THCTensor_(sortKeyValueInplace)(state, topK, indices, dim, dir);

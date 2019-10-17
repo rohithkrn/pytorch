@@ -1,8 +1,6 @@
-#include "caffe2/operators/quantized/int8_add_op.h"
-
 #include <climits>
 
-#include "caffe2/operators/utility_ops.h"
+#include "caffe2/operators/quantized/int8_add_op.h"
 
 namespace caffe2 {
 
@@ -57,8 +55,6 @@ OPERATOR_SCHEMA(Int8Sum)
     .NumInputs(1, std::numeric_limits<int>::max())
     .NumOutputs(1)
     .AllowInplace({{0, 0}, {1, 0}})
-    .CostInferenceFunction(CostInferenceForSum)
-    .IdenticalTypeAndShapeOfInput(0)
     .Arg("Y_scale", "Output tensor quantization scale")
     .Arg("Y_zero_point", "Output tensor quantization offset");
 
@@ -66,8 +62,6 @@ OPERATOR_SCHEMA(Int8SumRelu)
     .NumInputs(1, std::numeric_limits<int>::max())
     .NumOutputs(1)
     .AllowInplace({{0, 0}, {1, 0}})
-    .CostInferenceFunction(CostInferenceForSum)
-    .IdenticalTypeAndShapeOfInput(0)
     .Arg("Y_scale", "Output tensor quantization scale")
     .Arg("Y_zero_point", "Output tensor quantization offset");
 

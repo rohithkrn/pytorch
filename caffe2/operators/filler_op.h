@@ -20,9 +20,8 @@ namespace caffe2 {
 template <class Context>
 class FillerOp : public Operator<Context> {
  public:
-  template <class... Args>
-  explicit FillerOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...),
+  FillerOp(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<Context>(operator_def, ws),
         shape_(this->template GetRepeatedArgument<int64_t>("shape")),
         extra_shape_(ToVectorint64_t(
             this->template GetRepeatedArgument<int>("extra_shape"))),
@@ -56,31 +55,15 @@ class FillerOp : public Operator<Context> {
     if (InputSize()) {
       auto shape = vector<int64_t>{};
       if (input_as_shape_) {
-        if (this->InputIsTensorType(0, CPU)) {
-          // originally, shape input must be in CPU context
-          auto& input = this->template Input<Tensor>(0, CPU);
-          CAFFE_ENFORCE_EQ(
-              input.dim(),
-              1,
-              "When input_as_shape is true, the input must be a 1D tensor of "
-              "data type int64_t");
-          CAFFE_ENFORCE(input.numel() > 0);
-          auto* shape_data = input.template data<int64_t>();
-          shape.insert(shape.end(), shape_data, shape_data + input.dim32(0));
-        } else {
-          // in ONNX case, we allow shape to be in CUDA context
-          auto& input = Input(0);
-          CAFFE_ENFORCE_EQ(
-              input.dim(),
-              1,
-              "When input_as_shape is true, the input must be a 1D tensor of "
-              "data type int64_t");
-          CAFFE_ENFORCE(input.numel() > 0);
-          auto* shape_data = input.template data<int64_t>();
-          std::unique_ptr<int64_t[]> shape_data_copy = caffe2::make_unique<int64_t[]>(input.dim32(0));
-          context_.template CopyToCPU<int64_t>(input.dim32(0), shape_data, shape_data_copy.get());
-          shape.insert(shape.end(), shape_data_copy.get(), shape_data_copy.get() + input.dim32(0));
-        }
+        // Shape input must be in CPU context
+        auto& input = this->template Input<Tensor>(0, CPU);
+        CAFFE_ENFORCE_EQ(
+            input.dim(),
+            1,
+            "When input_as_shape is true, the input must be a 1D tensor of "
+            "data type int64_t");
+        auto* shape_data = input.template data<int64_t>();
+        shape.insert(shape.end(), shape_data, shape_data + input.dim32(0));
       } else {
         auto& input = Input(0);
         shape.insert(shape.end(), input.sizes().begin(), input.sizes().end());
@@ -105,9 +88,8 @@ template <typename T, class Context>
 class UniformFillOp final : public FillerOp<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
-  template <class... Args>
-  explicit UniformFillOp(Args&&... args)
-      : FillerOp<Context>(std::forward<Args>(args)...),
+  UniformFillOp(const OperatorDef& operator_def, Workspace* ws)
+      : FillerOp<Context>(operator_def, ws),
         min_(this->template GetSingleArgument<T>("min", 0)),
         max_(this->template GetSingleArgument<T>("max", 1)) {
     if (InputSize() == 3) {
@@ -157,9 +139,8 @@ template <class Context>
 class UniqueUniformFillOp final : public FillerOp<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
-  template <class... Args>
-  explicit UniqueUniformFillOp(Args&&... args)
-      : FillerOp<Context>(std::forward<Args>(args)...) {
+  UniqueUniformFillOp(const OperatorDef& operator_def, Workspace* ws)
+      : FillerOp<Context>(operator_def, ws) {
     TensorProto_DataType dtype =
         static_cast<TensorProto_DataType>(this->template GetSingleArgument<int>(
             "dtype", TensorProto_DataType_INT32));
@@ -227,9 +208,8 @@ template <class Context>
 class ConstantFillOp final : public FillerOp<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
-  template <class... Args>
-  explicit ConstantFillOp(Args&&... args)
-      : FillerOp<Context>(std::forward<Args>(args)...) {
+  ConstantFillOp(const OperatorDef& operator_def, Workspace* ws)
+      : FillerOp<Context>(operator_def, ws) {
     TensorProto_DataType dtype =
         static_cast<TensorProto_DataType>(this->template GetSingleArgument<int>(
             "dtype", TensorProto_DataType_FLOAT));
@@ -319,9 +299,8 @@ template <class Context>
 class DiagonalFillOp final : public FillerOp<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
-  template <class... Args>
-  explicit DiagonalFillOp(Args&&... args)
-      : FillerOp<Context>(std::forward<Args>(args)...) {
+  DiagonalFillOp(const OperatorDef& operator_def, Workspace* ws)
+      : FillerOp<Context>(operator_def, ws) {
     TensorProto_DataType dtype =
         static_cast<TensorProto_DataType>(this->template GetSingleArgument<int>(
             "dtype", TensorProto_DataType_FLOAT));
@@ -421,9 +400,8 @@ template <typename T, class Context>
 class GaussianFillOp final : public FillerOp<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
-  template <class... Args>
-  explicit GaussianFillOp(Args&&... args)
-      : FillerOp<Context>(std::forward<Args>(args)...),
+  GaussianFillOp(const OperatorDef& operator_def, Workspace* ws)
+      : FillerOp<Context>(operator_def, ws),
         mean_(this->template GetSingleArgument<float>("mean", 0)),
         std_(this->template GetSingleArgument<float>("std", 1)) {
     DCHECK_GT(std_, 0) << "Standard deviation should be nonnegative.";
@@ -448,9 +426,8 @@ template <typename T, class Context>
 class XavierFillOp final : public FillerOp<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
-  template <class... Args>
-  explicit XavierFillOp(Args&&... args)
-      : FillerOp<Context>(std::forward<Args>(args)...) {}
+  XavierFillOp(const OperatorDef& operator_def, Workspace* ws)
+      : FillerOp<Context>(operator_def, ws) {}
 
   bool Fill(Tensor* output) override {
     const int fan_in = output->numel() / output->dim32(0);
@@ -469,9 +446,8 @@ template <typename T, class Context>
 class MSRAFillOp final : public FillerOp<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
-  template <class... Args>
-  explicit MSRAFillOp(Args&&... args)
-      : FillerOp<Context>(std::forward<Args>(args)...) {}
+  MSRAFillOp(const OperatorDef& operator_def, Workspace* ws)
+      : FillerOp<Context>(operator_def, ws) {}
 
   bool Fill(Tensor* output) override {
     const int fan_out = output->numel() / output->dim32(1);
@@ -493,9 +469,8 @@ template <typename T, class Context>
 class RangeFillOp final : public FillerOp<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
-  template <class... Args>
-  explicit RangeFillOp(Args&&... args)
-      : FillerOp<Context>(std::forward<Args>(args)...) {}
+  RangeFillOp(const OperatorDef& operator_def, Workspace* ws)
+      : FillerOp<Context>(operator_def, ws) {}
 
   bool Fill(Tensor* output) override;
 };

@@ -1,6 +1,7 @@
 import sys
 import json
 import math
+import numpy
 import argparse
 
 parser = argparse.ArgumentParser()
@@ -61,10 +62,8 @@ print("z-value: ", z_value)
 if z_value >= 3:
     raise Exception('''\n
 z-value >= 3, there is high chance of perf regression.\n
-To reproduce this regression, run
-`cd .jenkins/pytorch/perf_test/ && bash {}.sh` on your local machine
-and compare the runtime before/after your code change.
-'''.format(test_name))
+To reproduce this regression, run `cd .jenkins/pytorch/perf_test/ && bash ''' + test_name + '''.sh` on your local machine and compare the runtime before/after your code change.
+''')
 else:
     print("z-value < 3, no perf regression detected.")
     if args.update:

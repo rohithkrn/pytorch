@@ -6,7 +6,7 @@ import numpy as np
 from hypothesis import given
 import hypothesis.strategies as st
 
-from caffe2.python import core, utils
+from caffe2.python import core
 import caffe2.python.hypothesis_test_util as hu
 import caffe2.python.serialized_test.serialized_test_util as serial
 
@@ -74,10 +74,10 @@ class TestLocallyConnectedOp(serial.SerializedTestCase):
             return [output]
 
         def lc_2d_nhwc(X, W, b=None):
-            XT = utils.NHWC2NCHW(X)
+            XT = np.transpose(X, [0, 3, 1, 2])
             WT = np.transpose(W, [0, 1, 2, 5, 3, 4])
             output = lc_2d_nchw(XT, WT, b)
-            return [utils.NCHW2NHWC(output[0])]
+            return [np.transpose(output[0], [0, 2, 3, 1])]
 
         ref_op = lc_2d_nchw if order == "NCHW" else lc_2d_nhwc
 

@@ -70,7 +70,6 @@ class TestReaderBuilder(ReaderBuilder):
     def setup(self, ws):
         self._src_ds = make_source_dataset(ws, offset=self._offset, size=self._size,
                                     name=self._name)
-        return {}
 
     def new_reader(self, **kwargs):
         return self._src_ds
@@ -364,7 +363,7 @@ class TestDBFileReader(TestCase):
 
         # Read data for the first time.
         cached_reader1 = CachedReader(
-            self._build_source_reader(ws, 100), db_path, loop_over=False,
+            self._build_source_reader(ws, 100), db_path,
         )
         build_cache_step = cached_reader1.build_cache_step()
         session.run(build_cache_step)

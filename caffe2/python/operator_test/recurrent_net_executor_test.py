@@ -4,7 +4,7 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 from caffe2.proto import caffe2_pb2
-from caffe2.python import model_helper, workspace, core, rnn_cell, test_util
+from caffe2.python import model_helper, workspace, core, rnn_cell
 from caffe2.python.attention import AttentionType
 
 import numpy as np
@@ -15,10 +15,9 @@ import hypothesis.strategies as st
 from hypothesis import given
 
 
-class TestRNNExecutor(test_util.TestCase):
+class TestRNNExecutor(unittest.TestCase):
 
     def setUp(self):
-        super(TestRNNExecutor, self).setUp()
         self.batch_size = 8
         self.input_dim = 20
         self.hidden_dim = 30
@@ -295,11 +294,12 @@ class TestRNNExecutor(test_util.TestCase):
         # start failing as this function will become defective.
         self.assertEqual(1 if forward_only else 2, num_found)
 
-if __name__ == "__main__":
-    import random
-    random.seed(2603)
-    workspace.GlobalInit([
-        'caffe2',
-        '--caffe2_log_level=0',
-        '--caffe2_rnn_executor=1'])
-    unittest.main()
+    if __name__ == "__main__":
+        import unittest
+        import random
+        random.seed(2603)
+        workspace.GlobalInit([
+            'caffe2',
+            '--caffe2_log_level=0',
+            '--caffe2_rnn_executor=1'])
+        unittest.main()

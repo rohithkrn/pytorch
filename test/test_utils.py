@@ -2,27 +2,39 @@ from __future__ import print_function
 import sys
 import os
 import re
+import math
 import shutil
 import random
 import tempfile
 import unittest
+import traceback
 import torch
 import torch.nn as nn
 import torch.utils.data
 import torch.cuda
+import warnings
 from torch.utils.checkpoint import checkpoint, checkpoint_sequential
 import torch.hub as hub
 from torch.autograd._functions.utils import prepare_onnx_paddings
 from torch.autograd._functions.utils import check_onnx_broadcast
-from common_utils import skipIfRocm, load_tests, IS_SANDCASTLE
+from common_utils import IS_WINDOWS, IS_PPC, skipIfRocm, load_tests
 
 # load_tests from common_utils is used to automatically filter tests for
 # sharding on sandcastle. This line silences flake warnings
 load_tests = load_tests
 
+try:
+    import torchvision.models as models
+    HAS_TORCHVISION = True
+except ImportError:
+    HAS_TORCHVISION = False
+
+
+skipIfNoTorchVision = unittest.skipIf(not HAS_TORCHVISION, "no torchvision")
+
 HAS_CUDA = torch.cuda.is_available()
 
-from common_utils import TestCase, run_tests
+from common_utils import TestCase, run_tests, download_file
 
 
 class RandomDatasetMock(object):
@@ -188,36 +200,8 @@ class TestCheckpoint(TestCase):
             torch.randn(1, 60, requires_grad=True)
         )
 
-    def test_checkpoint_sequential_deprecated_multiple_args(self):
-        class Two(nn.Module):
-            def forward(self, a, b):
-                return a, b
-
-        model = nn.Sequential(Two())
-        a = torch.randn(1, 100, requires_grad=True)
-        b = torch.randn(1, 100, requires_grad=True)
-
-        self.assertWarnsRegex(
-            lambda: checkpoint_sequential(model, 1, a, b),
-            'deprecated',
-            'checkpoint_sequential with multiple args should be deprecated',
-        )
-
-    def test_checkpoint_sequential_deprecated_no_args(self):
-        class Noop(nn.Module):
-            def forward(self):
-                pass
-
-        model = nn.Sequential(Noop())
-
-        self.assertWarnsRegex(
-            lambda: checkpoint_sequential(model, 1),
-            'deprecated',
-            'checkpoint_sequential with no args should be deprecated',
-        )
-
     def test_checkpoint_rng_cpu(self):
-        for _ in range(5):
+        for i in range(5):
             inp = torch.randn(20000, device='cpu').requires_grad_()
             phase1 = torch.nn.Dropout()
             phase2 = torch.nn.Dropout()
@@ -244,8 +228,9 @@ class TestCheckpoint(TestCase):
             self.assertEqual(grad_with_checkpointing, grad_no_checkpointing)
 
     @unittest.skipIf(not HAS_CUDA, 'No CUDA')
+    @skipIfRocm
     def test_checkpoint_rng_cuda(self):
-        for _ in range(5):
+        for i in range(5):
             inp = torch.randn(20000, device='cuda').requires_grad_()
             phase1 = torch.nn.Dropout()
             phase2 = torch.nn.Dropout()
@@ -270,17 +255,6 @@ class TestCheckpoint(TestCase):
             grad_no_checkpointing = inp.grad
 
             self.assertEqual(grad_with_checkpointing, grad_no_checkpointing)
-
-    def test_checkpoint_non_tensor(self):
-
-        def run_fn(tensor1, tensor2):
-            if tensor2 is None:
-                return tensor1
-            return tensor1 + tensor2
-
-        input_var = torch.randn(1, 100, requires_grad=True)
-        out = checkpoint(run_fn, input_var, None)
-        out.sum().backward()
 
 
 class TestDataLoader(TestCase):
@@ -342,7 +316,7 @@ test_dir = os.path.abspath(os.path.dirname(str(__file__)))
 class TestFFI(TestCase):
     def test_deprecated(self):
         with self.assertRaisesRegex(ImportError, "torch.utils.ffi is deprecated. Please use cpp extensions instead."):
-            from torch.utils.ffi import create_extension  # noqa: F401
+            from torch.utils.ffi import create_extension
 
 
 @unittest.skipIf('SKIP_TEST_BOTTLENECK' in os.environ.keys(), 'SKIP_TEST_BOTTLENECK is set')
@@ -352,7 +326,7 @@ class TestBottleneck(TestCase):
         import subprocess
         from common_utils import PY3
 
-        p = subprocess.Popen(command, stdout=subprocess.PIPE,  # noqa
+        p = subprocess.Popen(command, stdout=subprocess.PIPE,
                              stderr=subprocess.PIPE, shell=True)
         output, err = p.communicate()
         rc = p.returncode
@@ -511,68 +485,31 @@ class TestONNXUtils(TestCase):
         try_check_onnx_broadcast(dims1, dims2, True, False)
 
 
-def sum_of_state_dict(state_dict):
-    s = 0
-    for _, v in state_dict.items():
-        s += v.sum()
-    return s
-
-SUM_OF_HUB_EXAMPLE = 431080
-TORCHHUB_EXAMPLE_RELEASE_URL = 'https://github.com/ailzhang/torchhub_example/releases/download/0.1/mnist_init_ones'
-
-@unittest.skipIf(IS_SANDCASTLE, 'Sandcastle cannot ping external')
 class TestHub(TestCase):
+    @classmethod
+    @skipIfNoTorchVision
+    def setUpClass(cls):
+        cls.resnet18_pretrained = models.__dict__['resnet18'](pretrained=True).state_dict()
+
+    @skipIfNoTorchVision
     def test_load_from_github(self):
         hub_model = hub.load(
-            'ailzhang/torchhub_example',
-            'mnist',
-            pretrained=True,
-            verbose=False)
-        self.assertEqual(sum_of_state_dict(hub_model.state_dict()),
-                         SUM_OF_HUB_EXAMPLE)
+            'pytorch/vision',
+            'resnet18',
+            pretrained=True)
+        self.assertEqual(self.resnet18_pretrained, hub_model.state_dict())
 
+    @skipIfNoTorchVision
     def test_set_dir(self):
         temp_dir = tempfile.gettempdir()
         hub.set_dir(temp_dir)
         hub_model = hub.load(
-            'ailzhang/torchhub_example',
-            'mnist',
-            pretrained=True,
-            verbose=False)
-        self.assertEqual(sum_of_state_dict(hub_model.state_dict()),
-                         SUM_OF_HUB_EXAMPLE)
-        assert os.path.exists(temp_dir + '/ailzhang_torchhub_example_master')
-        shutil.rmtree(temp_dir + '/ailzhang_torchhub_example_master')
-
-    def test_list_entrypoints(self):
-        entry_lists = hub.list('ailzhang/torchhub_example', force_reload=True)
-        self.assertObjectIn('mnist', entry_lists)
-
-    def test_download_url_to_file(self):
-        temp_file = os.path.join(tempfile.gettempdir(), 'temp')
-        hub.download_url_to_file(TORCHHUB_EXAMPLE_RELEASE_URL, temp_file, progress=False)
-        loaded_state = torch.load(temp_file)
-        self.assertEqual(sum_of_state_dict(loaded_state),
-                         SUM_OF_HUB_EXAMPLE)
-
-    def test_load_state_dict_from_url(self):
-        loaded_state = hub.load_state_dict_from_url(TORCHHUB_EXAMPLE_RELEASE_URL)
-        self.assertEqual(sum_of_state_dict(loaded_state),
-                         SUM_OF_HUB_EXAMPLE)
-
-    def test_load_zip_checkpoint(self):
-        hub_model = hub.load(
-            'ailzhang/torchhub_example',
-            'mnist_zip',
-            pretrained=True,
-            verbose=False)
-        self.assertEqual(sum_of_state_dict(hub_model.state_dict()),
-                         SUM_OF_HUB_EXAMPLE)
-
-
-class TestHipify(TestCase):
-    def test_import_hipify(self):
-        from torch.utils.hipify import hipify_python # noqa
+            'pytorch/vision',
+            'resnet18',
+            pretrained=True)
+        self.assertEqual(self.resnet18_pretrained, hub_model.state_dict())
+        assert os.path.exists(temp_dir + '/vision_master')
+        shutil.rmtree(temp_dir + '/vision_master')
 
 
 if __name__ == '__main__':

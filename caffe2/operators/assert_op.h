@@ -9,9 +9,8 @@ namespace caffe2 {
 template <class Context>
 class AssertOp final : public Operator<Context> {
  public:
-  template <class... Args>
-  explicit AssertOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...),
+  AssertOp(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<Context>(operator_def, ws),
         error_msg_(
             this->template GetSingleArgument<std::string>("error_msg", "")) {}
 

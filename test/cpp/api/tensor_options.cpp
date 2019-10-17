@@ -22,12 +22,18 @@ using namespace at;
 #define REQUIRE_TENSOR_OPTIONS(device_, index_, type_, layout_)            \
   ASSERT_EQ(tensor.device().type(), Device((device_), (index_)).type());   \
   ASSERT_EQ(tensor.device().index(), Device((device_), (index_)).index()); \
-  ASSERT_EQ(tensor.scalar_type(), (type_));                                \
+  ASSERT_EQ(tensor.type().scalarType(), (type_));                          \
   ASSERT_TRUE(tensor.type().layout() == (layout_))
 
 TEST(TensorOptionsTest, DefaultsToTheRightValues) {
   TensorOptions options;
   REQUIRE_OPTIONS(kCPU, -1, kFloat, kStrided);
+}
+
+TEST(TensorOptionsTest, ReturnsTheCorrectType) {
+  auto options = TensorOptions().device(kCPU).dtype(kInt).layout(kSparse);
+  ASSERT_TRUE(
+      at::getType(options) == getNonVariableType(Backend::SparseCPU, kInt));
 }
 
 TEST(TensorOptionsTest, UtilityFunctionsReturnTheRightTensorOptions) {
@@ -60,10 +66,10 @@ TEST(TensorOptionsTest, ConstructsWellFromCPUTypes) {
   options = TensorOptions(kInt);
   REQUIRE_OPTIONS(kCPU, -1, kInt, kStrided);
 
-  options = TensorOptions(getNonVariableDeprecatedTypeProperties(Backend::SparseCPU, kFloat));
+  options = TensorOptions(getNonVariableType(Backend::SparseCPU, kFloat));
   REQUIRE_OPTIONS(kCPU, -1, kFloat, kSparse);
 
-  options = TensorOptions(getNonVariableDeprecatedTypeProperties(Backend::SparseCPU, kByte));
+  options = TensorOptions(getNonVariableType(Backend::SparseCPU, kByte));
   REQUIRE_OPTIONS(kCPU, -1, kByte, kSparse);
 }
 
@@ -71,7 +77,7 @@ TEST(TensorOptionsTest, ConstructsWellFromCPUTensors) {
   auto options = empty(5, kDouble).options();
   REQUIRE_OPTIONS(kCPU, -1, kDouble, kStrided);
 
-  options = empty(5, getNonVariableDeprecatedTypeProperties(Backend::SparseCPU, kByte)).options();
+  options = empty(5, getNonVariableType(Backend::SparseCPU, kByte)).options();
   REQUIRE_OPTIONS(kCPU, -1, kByte, kSparse);
 }
 
@@ -127,7 +133,7 @@ struct DefaultDtypeTest : ::testing::Test {
   DefaultDtypeTest() {
     set_default_dtype(caffe2::TypeMeta::Make<float>());
   }
-  ~DefaultDtypeTest() override {
+  ~DefaultDtypeTest() {
     set_default_dtype(caffe2::TypeMeta::Make<float>());
   }
 };

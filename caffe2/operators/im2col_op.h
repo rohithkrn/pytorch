@@ -12,9 +12,8 @@ template <typename T, class Context>
 class Im2ColOp final : public Operator<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
-  template <class... Args>
-  explicit Im2ColOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...),
+  Im2ColOp(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<Context>(operator_def, ws),
         pad_(this->template GetSingleArgument<int>("pad", 0)),
         kernel_h_(this->template GetSingleArgument<int>(
             "kernel_h",
@@ -158,9 +157,8 @@ template <typename T, class Context>
 class Col2ImOp final : public Operator<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
-  template <class... Args>
-  explicit Col2ImOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...),
+  Col2ImOp(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<Context>(operator_def, ws),
         pad_(this->template GetSingleArgument<int>("pad", 0)),
         kernel_h_(this->template GetSingleArgument<int>(
             "kernel_h",

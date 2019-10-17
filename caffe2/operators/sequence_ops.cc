@@ -203,10 +203,7 @@ bool PadEmptySamplesOp<CPUContext>::RunOnDevice() {
     Tensor zero{CPU};
     zero.Resize(block_size);
     auto zeroPtr = static_cast<char*>(zero.raw_mutable_data(features.dtype()));
-    // TODO Handle other composite types, such as vector<...>
-    if (!features.dtype().Match<std::string>()) {
-      memset(zeroPtr, 0, zero.nbytes());
-    }
+    memset(zeroPtr, 0, zero.nbytes());
     int start_dest = 0;
     int start_src = 0;
     for (int i = 0; i < lengths.numel(); ++i) {

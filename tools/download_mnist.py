@@ -5,6 +5,7 @@ import argparse
 import gzip
 import os
 import sys
+import urllib
 
 try:
     from urllib.error import URLError

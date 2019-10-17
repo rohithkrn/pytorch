@@ -207,50 +207,44 @@ namespace {
   void adaptive_avg_pool2d_out_cuda_template(
     Tensor& output,
     const Tensor& input,
-    IntArrayRef output_size)
+    IntList output_size)
   {
     TensorArg input_arg{ input, "input", 1 },
               output_arg{ output, "output", 2 };
     checkAllSameGPU("cudnn_adaptive_avg_pooling2d", {input_arg, output_arg});
 
     for (int64_t i = 0; i < input.ndimension(); i++) {
-      TORCH_CHECK(input.size(i) > 0,
+      AT_CHECK(input.size(i) > 0,
         "adaptive_avg_pooling2d(): expected input to have non-empty spatial dimensions, "
         "but input has sizes ", input.sizes(), " with dimension ", i, " being "
         "empty");
     }
 
-    TORCH_CHECK((input.ndimension() == 3 || input.ndimension() == 4),
+    AT_CHECK((input.ndimension() == 3 || input.ndimension() == 4),
       "non-empty 3D or 4D (batch mode) tensor expected for input");
-    Tensor input_ = input;
-    int64_t grid_x = input.size(-3);
-    if (input.ndimension() == 4) {
-       input_ = input.contiguous();
-       grid_x *= input_.size(-4);
-    }
-    int64_t sizeD  = input_.size(-3);
-    int64_t isizeH = input_.size(-2);
-    int64_t isizeW = input_.size(-1);
 
-    int64_t istrideD = input_.stride(-3);
-    int64_t istrideH = input_.stride(-2);
-    int64_t istrideW = input_.stride(-1);
+    if (input.ndimension() == 3) {
+      int64_t sizeD  = input.size(0);
+      int64_t isizeH = input.size(1);
+      int64_t isizeW = input.size(2);
 
-    int64_t osizeH = output_size[0];
-    int64_t osizeW = output_size[1];
-    if (input.ndimension() == 4) {
-       output.resize_({input_.size(-4), sizeD, osizeH, osizeW});
-    } else {
-       output.resize_({sizeD, osizeH, osizeW});
-    }
-    AT_DISPATCH_FLOATING_TYPES_AND_HALF(
-        input_.scalar_type(), "adaptive_avg_pool2d_cuda", [&] {
-          scalar_t *input_data = input_.data_ptr<scalar_t>();
-          scalar_t *output_data = output.data_ptr<scalar_t>();
+      int64_t istrideD = input.stride(0);
+      int64_t istrideH = input.stride(1);
+      int64_t istrideW = input.stride(2);
+
+      int64_t osizeH = output_size[0];
+      int64_t osizeW = output_size[1];
+      AT_DISPATCH_FLOATING_TYPES_AND_HALF(
+        input.type(), "adaptive_avg_pool2d", [&] {
+          scalar_t *input_data = input.data<scalar_t>();
+
+          output.resize_({sizeD, osizeH, osizeW});
+
+          scalar_t *output_data = output.data<scalar_t>();
 
           // cuda blocks & threads:
           int blocksH = std::max<int64_t>((int)(16L / sizeD), 1);
-          dim3 blocks(grid_x, blocksH);
+          dim3 blocks(sizeD, blocksH);
           dim3 threads(32, 8);
 
           // run averagepool kernel
@@ -260,6 +254,40 @@ namespace {
             istrideD, istrideH, istrideW);
           }
       );
+    } else {
+      Tensor input_ = input.contiguous();
+      int64_t sizeB  = input_.size(0);
+      int64_t sizeD  = input_.size(1);
+      int64_t isizeH = input_.size(2);
+      int64_t isizeW = input.size(3);
+
+      int64_t istrideD = input_.stride(1);
+      int64_t istrideH = input_.stride(2);
+      int64_t istrideW = input_.stride(3);
+
+      int64_t osizeH = output_size[0];
+      int64_t osizeW = output_size[1];
+      AT_DISPATCH_FLOATING_TYPES_AND_HALF(
+        input.type(), "adaptive_avg_pool2d", [&] {
+          scalar_t *input_data = input_.data<scalar_t>();
+
+          output.resize_({sizeB, sizeD, osizeH, osizeW});
+
+          scalar_t *output_data = output.data<scalar_t>();
+
+          // cuda blocks & threads:
+          int blocksH = std::max<int64_t>((int)(16L / sizeD), 1);
+          dim3 blocks(sizeB * sizeD, blocksH);
+          dim3 threads(32, 8);
+
+          // run averagepool kernel
+          adaptiveaveragepool <<<blocks, threads, 0, at::cuda::getCurrentCUDAStream()>>> (
+            input_data, output_data,
+            isizeH, isizeW, osizeH, osizeW,
+            istrideD, istrideH, istrideW);
+        }
+      );
+    }
     THCudaCheck(cudaGetLastError());
   }
 
@@ -278,25 +306,23 @@ namespace {
 
     Tensor gradOutput = gradOutput_.contiguous();
 
-    int64_t sizeD  = input.size(-3);
-    int64_t isizeH = input.size(-2);
-    int64_t isizeW = input.size(-1);
+    if (input.ndimension() == 3) {
+      int64_t sizeD  = input.size(0);
+      int64_t isizeH = input.size(1);
+      int64_t isizeW = input.size(2);
 
-    int64_t osizeH = gradOutput.size(-2);
-    int64_t osizeW = gradOutput.size(-1);
-
-    int64_t grid_x = sizeD;
-    if (input.ndimension() == 4) grid_x *= input.size(-4);
+      int64_t osizeH = gradOutput.size(1);
+      int64_t osizeW = gradOutput.size(2);
 
       //bool atomic = (isizeW%osizeW != 0) || (isizeH%osizeH != 0);
-    AT_DISPATCH_FLOATING_TYPES_AND_HALF(
-        input.scalar_type(), "adaptive_avg_pool2d_backward_cuda", [&] {
-          scalar_t *gradOutput_data = gradOutput.data_ptr<scalar_t>();
-          scalar_t *gradInput_data = gradInput.data_ptr<scalar_t>();
+      AT_DISPATCH_FLOATING_TYPES_AND_HALF(
+        input.type(), "adaptive_avg_pool2d_backward", [&] {
+          scalar_t *gradOutput_data = gradOutput.data<scalar_t>();
+          scalar_t *gradInput_data = gradInput.data<scalar_t>();
 
           // cuda blocks & threads:
           int blocksH = std::max((int)(16L / sizeD), 1);
-          dim3 blocks(grid_x, blocksH);
+          dim3 blocks(sizeD, blocksH);
           dim3 threads(32, 8);
 
           if(atomic)
@@ -315,6 +341,43 @@ namespace {
           }
         }
       );
+    } else {
+      int64_t sizeB  = input.size(0);
+      int64_t sizeD  = input.size(1);
+      int64_t isizeH = input.size(2);
+      int64_t isizeW = input.size(3);
+
+      int64_t osizeH = gradOutput.size(2);
+      int64_t osizeW = gradOutput.size(3);
+
+      //bool atomic = //(isizeW%osizeW != 0) || (isizeH%osizeH != 0);
+      AT_DISPATCH_FLOATING_TYPES_AND_HALF(
+        input.type(), "adaptive_avg_pool2d_backward", [&] {
+          scalar_t *gradOutput_data = gradOutput.data<scalar_t>();
+          scalar_t *gradInput_data = gradInput.data<scalar_t>();
+
+          // cuda blocks & threads:
+          int blocksH = std::max((int)(16L / sizeD), 1);
+          dim3 blocks(sizeB * sizeD, blocksH);
+          dim3 threads(32, 8);
+
+          if(atomic)
+          {
+            // run updateGradInput kernel, accumulate gradients atomically
+            atomicadaptiveaveragegradinput <<<blocks, threads, 0, at::cuda::getCurrentCUDAStream()>>> (
+              gradInput_data, gradOutput_data,
+              isizeH, isizeW, osizeH, osizeW);
+          }
+          else
+          {
+            // run updateGradInput kernel, accumulate gradients atomically
+            adaptiveaveragegradinput <<<blocks, threads, 0, at::cuda::getCurrentCUDAStream()>>> (
+              gradInput_data, gradOutput_data,
+              isizeH, isizeW, osizeH, osizeW);
+          }
+        }
+      );
+    }
     THCudaCheck(cudaGetLastError());
   }
 
@@ -323,7 +386,7 @@ namespace {
   Tensor& adaptive_avg_pool2d_out_cuda(
     Tensor& output,
     const Tensor& input,
-    IntArrayRef output_size)
+    IntList output_size)
   {
     adaptive_avg_pool2d_out_cuda_template(
       output, input, output_size);
@@ -332,7 +395,7 @@ namespace {
 
   Tensor adaptive_avg_pool2d_cuda(
     at::Tensor const& input,
-    IntArrayRef output_size)
+    IntList output_size)
   {
     auto output = at::empty({0}, input.options());
     adaptive_avg_pool2d_out_cuda_template(

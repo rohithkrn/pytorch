@@ -18,9 +18,8 @@ template <
 class CPUSparseLengthsReductionOp : public Operator<CPUContext> {
  public:
   USE_OPERATOR_FUNCTIONS(CPUContext);
-  template <class... Args>
-  explicit CPUSparseLengthsReductionOp(Args&&... args)
-      : Operator<CPUContext>(std::forward<Args>(args)...) {
+  CPUSparseLengthsReductionOp(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<CPUContext>(operator_def, ws) {
     static_assert(
         !(USE_WEIGHT & USE_MEAN), "Cannot both specify weight and mean.");
   }

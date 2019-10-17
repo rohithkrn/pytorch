@@ -10,12 +10,7 @@ namespace at { namespace native {
 // to benchmark than TH; I can't get gbenchmark to call fns from THTensor.cpp
 
 static inline void maybe_resize_storage_cpu(TensorImpl* self, int64_t new_size) {
-  // It does not make sense to try to resize a storage
-  // to hold 0 elements, and this can break
-  // if storage_offset is positive but
-  // new_size is 0, so just bail in that case
-  // (same comment is in Resize.cuh)
-  if (new_size > 0) {
+  if (new_size + self->storage_offset() > 0) {
     if (!THTensor_getStoragePtr(self)) {
       THTensor_stealAndSetStoragePtr(self, THStorage_new(self->dtype()));
     }
@@ -29,8 +24,8 @@ static inline void maybe_resize_storage_cpu(TensorImpl* self, int64_t new_size) 
 
 inline TensorImpl* resize_impl_cpu_(
     TensorImpl* self,
-    IntArrayRef size,
-    c10::optional<IntArrayRef> stride) {
+    IntList size,
+    c10::optional<IntList> stride) {
   if (self->sizes() == size && (!stride || self->strides() == stride)) {
     return self;
   }
@@ -57,18 +52,29 @@ inline TensorImpl* resize_impl_cpu_(
   return self;
 }
 
+static inline int64_t computeStorageSize(IntList sizes, IntList strides) {
+  int64_t storage_size = 1;
+  for (size_t dim = 0; dim < sizes.size(); ++dim) {
+    if (sizes[dim] == 0) {
+      return 0;
+    }
+    storage_size += strides[dim] * (sizes[dim] - 1);
+  }
+  return storage_size;
+}
+
 static inline void checkInBoundsForStorage(
-    IntArrayRef size,
-    IntArrayRef stride,
+    IntList size,
+    IntList stride,
     int64_t storage_offset,
     const Storage& new_storage) {
-  int64_t storage_size = detail::computeStorageSize(size, stride);
+  int64_t storage_size = computeStorageSize(size, stride);
   if (storage_size == 0) {
     // NB: (a tensor with arbitrary 0 dims)'s storage can have any numel.
     return;
   }
   int64_t new_storage_size = new_storage.numel();
-  TORCH_CHECK(
+  AT_CHECK(
       storage_offset + storage_size <= new_storage_size,
       "setStorage: sizes ", size, ", strides ", stride, ","
       " and storage offset ", storage_offset,
@@ -82,14 +88,14 @@ static inline void checkInBoundsForStorage(
  */
 inline void setStrided(
     const Tensor& self,
-    IntArrayRef size,
-    IntArrayRef stride,
+    IntList size,
+    IntList stride,
     int64_t storage_offset) {
   auto* self_ = self.unsafeGetTensorImpl();
   checkInBoundsForStorage(size, stride, storage_offset, self_->storage());
 
   /* storage offset */
-  TORCH_CHECK(storage_offset >= 0, "Tensor: invalid storage offset ", storage_offset);
+  AT_CHECK(storage_offset >= 0, "Tensor: invalid storage offset ", storage_offset);
   self_->set_storage_offset(storage_offset);
 
   /* size and stride */

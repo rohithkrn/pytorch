@@ -2,7 +2,7 @@
 #include <ATen/NativeFunctions.h>
 #include <c10/util/Optional.h>
 
-#include <c10/core/impl/DeviceGuardImplInterface.h>
+#include <c10/impl/DeviceGuardImplInterface.h>
 
 namespace at {
 namespace native {
@@ -20,18 +20,17 @@ static inline Device ensure_has_index(Device device) {
 }
 
 static inline Tensor to_impl(const Tensor& self, const TensorOptions& options, bool non_blocking) {
-  auto r = at::empty(self.sizes(), options);
-  r.copy_(self, non_blocking);
-  return r;
+  return self.type().toBackend(options.backend()).toScalarType(typeMetaToScalarType(options.dtype()))
+                    .copy(self, non_blocking, options.device());
 }
 
 Tensor to(const Tensor& self, const TensorOptions& options, bool non_blocking, bool copy) {
-  TORCH_CHECK(options.requires_grad_opt() == c10::nullopt,
+  AT_CHECK(options.requires_grad_opt() == c10::nullopt,
            "to(options) expects unset requires_grad flag, but got "
            "options.requires_grad set as ", options.requires_grad());
 
   const auto & layout_opt = options.layout_opt();
-  TORCH_CHECK(!layout_opt || self.layout() == layout_opt.value(),
+  AT_CHECK(!layout_opt || self.layout() == layout_opt.value(),
            "to(options) doesn't support converting to a different layout, "
            "but got self.layout being ", self.layout(),
            " and options.layout set as ", options.layout());
@@ -79,23 +78,6 @@ Tensor to(const Tensor& self, const Tensor& other, bool non_blocking, bool copy)
     return self;
   }
   return to_impl(self, options, non_blocking);
-}
-
-Tensor to_dense_backward(const Tensor& grad, const Tensor& input_) {
-  AT_ASSERT(input_.layout() != c10::kStrided);
-  if (input_.layout() == c10::kSparse) {
-    auto input = input_.coalesce();
-    return grad.sparse_mask(input);
-  } else if (input_.layout() == c10::kMkldnn) {
-    return grad.to_mkldnn();
-  } else {
-    AT_ERROR("Unsupported input layout: ", input_.layout());
-  }
-}
-
-Tensor to_mkldnn_backward(const Tensor& grad, const Tensor& input_) {
-  AT_ASSERT(input_.layout() == c10::kStrided);
-  return grad.to_dense();
 }
 
 }} // namespace at::native

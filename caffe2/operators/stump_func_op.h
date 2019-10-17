@@ -32,9 +32,8 @@ class StumpFuncOp final : public Operator<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
 
-  template <class... Args>
-  explicit StumpFuncOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...),
+  StumpFuncOp(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<Context>(operator_def, ws),
         threshold_(this->template GetSingleArgument<TIN>("threshold", 0)),
         low_value_(this->template GetSingleArgument<TOUT>("low_value", 0)),
         high_value_(this->template GetSingleArgument<TOUT>("high_value", 0)) {}
@@ -54,9 +53,8 @@ class StumpFuncIndexOp final : public Operator<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
 
-  template <class... Args>
-  explicit StumpFuncIndexOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...),
+  StumpFuncIndexOp(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<Context>(operator_def, ws),
         threshold_(this->template GetSingleArgument<TIN>("threshold", 0)) {}
 
   bool RunOnDevice() override;

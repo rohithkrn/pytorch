@@ -4,50 +4,42 @@
     (list
       (param
         (ident x)
-        (option)
-        (option)
-        (False))
+        (variable (ident Tensor))
+        (option))
       (param
         (ident y)
-        (option)
-        (option)
-        (False))
+        (variable (ident Tensor))
+        (option))
       (param
         (ident z)
-        (option)
-        (option)
-        (False)))
+        (variable (ident Tensor))
+        (option)))
     (option))
   (list
     (assign
-      (list (variable (ident q)))
-      (option (None))
-      (option))
+      (variable (ident q))
+      (None))
     (assign
-      (list (variable (ident q)))
-      (option
-        (-
-          (+
-            (variable (ident x))
-            (variable (ident y)))
-          (apply
-            (.
-              (variable (ident z))
-              (ident sigmoid))
-            (list)
-            (list))))
-      (option))
+      (variable (ident q))
+      (-
+        (+
+          (variable (ident x))
+          (variable (ident y)))
+        (apply
+          (.
+            (variable (ident z))
+            (ident sigmoid))
+          (list)
+          (list))))
     (expression statement
       (apply
         (variable (ident print))
         (list (variable (ident q)))
         (list)))
     (assign
-      (list (variable (ident w)))
-      (option
-        (unary minus
-          (variable (ident z))))
-      (option))
+      (variable (ident w))
+      (unary minus
+        (variable (ident z))))
     (if
       (and
         (and
@@ -56,14 +48,11 @@
         (variable (ident z)))
       (list
         (assign
-          (list (variable (ident m)))
-          (option
-            (if
-              (not
-                (variable (ident z)))
-              (variable (ident x))
-              (variable (ident y))))
-          (option)))
+          (variable (ident m))
+          (if
+            (not (variable (ident z)))
+            (variable (ident x))
+            (variable (ident y)))))
       (list))
     (while
       (and
@@ -75,10 +64,10 @@
           (variable (ident z))))
       (list
         (assign
-          (list (variable (ident q)))
-          (option (variable (ident x)))
-          (option))))
+          (variable (ident q))
+          (variable (ident x)))))
     (assert
       (eq (const 1) (const 1))
       (option (string_literal hello)))
-    (return (variable (ident x)))))
+    (return
+      (list (variable (ident x))))))

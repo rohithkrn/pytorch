@@ -1,23 +1,44 @@
-#include <test/cpp/jit/tests.h>
-
 #include <gtest/gtest.h>
 
-namespace torch {
-namespace jit {
+#include <test/cpp/jit/tests.h>
 
-#define JIT_GTEST(name) \
+using namespace torch;
+using namespace torch::jit;
+
+#define JIT_TEST(name)  \
   TEST(JitTest, name) { \
     test##name();       \
   }
-TH_FORALL_TESTS(JIT_GTEST)
-#undef JIT_TEST
 
-#define JIT_GTEST_CUDA(name)   \
+JIT_TEST(ADFormulas)
+JIT_TEST(Attributes)
+JIT_TEST(Blocks)
+JIT_TEST(CodeTemplate)
+JIT_TEST(ControlFlow)
+JIT_TEST(CreateAutodiffSubgraphs)
+JIT_TEST(CustomOperators)
+JIT_TEST(Differentiate)
+JIT_TEST(DifferentiateWithRequiresGrad)
+JIT_TEST(DynamicDAG)
+JIT_TEST(FromQualString)
+JIT_TEST(InternedStrings)
+JIT_TEST(IValue)
+JIT_TEST(RegisterFusionCachesKernel)
+JIT_TEST(SchemaParser)
+JIT_TEST(TopologicalIndex)
+JIT_TEST(TopologicalMove)
+JIT_TEST(SubgraphUtils)
+JIT_TEST(AliasAnalysis)
+
+JIT_TEST(THNNConv)
+JIT_TEST(ATenNativeBatchNorm)
+
+#define JIT_TEST_CUDA(name)    \
   TEST(JitTest, name##_CUDA) { \
     test##name();              \
   }
-TH_FORALL_TESTS_CUDA(JIT_GTEST_CUDA)
-#undef JIT_TEST_CUDA
 
-} // namespace jit
-} // namespace torch
+JIT_TEST_CUDA(ArgumentSpec)
+JIT_TEST_CUDA(Fusion)
+JIT_TEST_CUDA(GraphExecutor)
+JIT_TEST_CUDA(Interp)

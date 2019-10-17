@@ -1,9 +1,9 @@
 #pragma once
 
 // The legacy mechanism for initializing device types; this is used by
-// LegacyTypeDispatch.
+// both LegacyTypeDispatch and LegacyTHDispatch.
 
-#include <c10/core/DeviceType.h>
+#include <c10/DeviceType.h>
 #include <c10/macros/Macros.h>
 #include <c10/util/Registry.h>
 #include <ATen/core/ScalarType.h>
@@ -20,6 +20,9 @@ struct CAFFE2_API LegacyDeviceTypeInitInterface {
   }
   virtual void initHIP() const {
     AT_ERROR("cannot use HIP without ATen HIP library");
+  }
+  virtual void initComplex() const {
+    AT_ERROR("cannot use complex without ATen Complex library");
   }
 };
 

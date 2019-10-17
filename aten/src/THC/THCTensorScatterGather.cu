@@ -75,9 +75,6 @@ struct IndexToScatterGatherOffsets<IndexType, Real, -1> {
 };
 
 template <typename IndexType, typename Real, int Dims>
-#ifdef __HIP_PLATFORM_HCC__
-C10_LAUNCH_BOUNDS_1(512)
-#endif
 __global__ void THCudaTensor_gatherKernel(
     TensorInfo<Real, IndexType> tensor,
     TensorInfo<Real, IndexType> src,
@@ -96,7 +93,7 @@ __global__ void THCudaTensor_gatherKernel(
                                                           tensor, &tensorOffset,
                                                           src, &srcOffset);
 
-    int64_t indexValue = index.data[indexOffset];
+    int64_t indexValue = index.data[indexOffset] - TH_INDEX_BASE;
     assert(indexValue >= 0 && indexValue < src.sizes[dim]);
     srcOffset += indexValue * src.strides[dim];
 
@@ -105,9 +102,6 @@ __global__ void THCudaTensor_gatherKernel(
 }
 
 template <typename IndexType, typename Real, int Dims>
-#ifdef __HIP_PLATFORM_HCC__
-C10_LAUNCH_BOUNDS_1(512)
-#endif
 __global__ void THCudaTensor_scatterKernel(
     TensorInfo<Real, IndexType> tensor,
     TensorInfo<Real, IndexType> src,
@@ -126,7 +120,7 @@ __global__ void THCudaTensor_scatterKernel(
                                                           src, &srcOffset,
                                                           tensor, &tensorOffset);
 
-    int64_t indexValue = index.data[indexOffset];
+    int64_t indexValue = index.data[indexOffset] - TH_INDEX_BASE;
     assert(indexValue >= 0 && indexValue < tensor.sizes[dim]);
     tensorOffset += indexValue * tensor.strides[dim];
 
@@ -135,9 +129,6 @@ __global__ void THCudaTensor_scatterKernel(
 }
 
 template <typename IndexType, typename Real, int Dims>
-#ifdef __HIP_PLATFORM_HCC__
-C10_LAUNCH_BOUNDS_1(512)
-#endif
 __global__ void THCudaTensor_scatterAddKernel(
     TensorInfo<Real, IndexType> tensor,
     TensorInfo<Real, IndexType> src,
@@ -156,7 +147,7 @@ __global__ void THCudaTensor_scatterAddKernel(
                                                           src, &srcOffset,
                                                           tensor, &tensorOffset);
 
-    int64_t indexValue = index.data[indexOffset];
+    int64_t indexValue = index.data[indexOffset] - TH_INDEX_BASE;
     assert(indexValue >= 0 && indexValue < tensor.sizes[dim]);
     tensorOffset += indexValue * tensor.strides[dim];
 
@@ -165,9 +156,6 @@ __global__ void THCudaTensor_scatterAddKernel(
 }
 
 template <typename IndexType, typename Real, int Dims>
-#ifdef __HIP_PLATFORM_HCC__
-C10_LAUNCH_BOUNDS_1(512)
-#endif
 __global__ void THCudaTensor_scatterFillKernel(
     TensorInfo<Real, IndexType> tensor,
     TensorInfo<int64_t, IndexType> index,
@@ -184,7 +172,7 @@ __global__ void THCudaTensor_scatterFillKernel(
                                                           index, &indexOffset,
                                                           tensor, &tensorOffset);
 
-    int64_t indexValue = index.data[indexOffset];
+    int64_t indexValue = index.data[indexOffset] - TH_INDEX_BASE;
     assert(indexValue >= 0 && indexValue < tensor.sizes[dim]);
     tensorOffset += indexValue * tensor.strides[dim];
 
@@ -194,6 +182,3 @@ __global__ void THCudaTensor_scatterFillKernel(
 
 #include <THC/generic/THCTensorScatterGather.cu>
 #include <THC/THCGenerateAllTypes.h>
-
-#include <THC/generic/THCTensorScatterGather.cu>
-#include <THC/THCGenerateBoolType.h>

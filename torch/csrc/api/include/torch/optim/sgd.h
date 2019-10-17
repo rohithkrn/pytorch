@@ -31,15 +31,14 @@ struct TORCH_API SGDOptions {
 class TORCH_API SGD : public Optimizer {
  public:
   template <typename ParameterContainer>
-  explicit SGD(ParameterContainer&& parameters, const SGDOptions& options_)
+  explicit SGD(ParameterContainer&& parameters, const SGDOptions& options)
       : Optimizer(std::forward<ParameterContainer>(parameters)),
-        options(options_) {}
+        options(options) {}
 
   void step() override;
 
   void save(serialize::OutputArchive& archive) const override;
   void load(serialize::InputArchive& archive) override;
-  int64_t iteration() const;
 
   SGDOptions options;
 
@@ -49,7 +48,7 @@ class TORCH_API SGD : public Optimizer {
   SGD() : options(0) {}
 
   /// Counts how often `step()` is called, for dampening.
-  int64_t iteration_{0};
+  size_t iteration_{0};
 };
 } // namespace optim
 } // namespace torch

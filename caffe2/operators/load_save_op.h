@@ -40,7 +40,7 @@ template <class Context>
 class DBExistsOp final : public Operator<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
-  explicit DBExistsOp(const OperatorDef& operator_def, Workspace* ws)
+  DBExistsOp(const OperatorDef& operator_def, Workspace* ws)
       : Operator<Context>(operator_def, ws),
         ws_(ws),
         absolute_path_(
@@ -70,7 +70,7 @@ template <class Context>
 class LoadOp final : public Operator<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
-  explicit LoadOp(const OperatorDef& operator_def, Workspace* ws)
+  LoadOp(const OperatorDef& operator_def, Workspace* ws)
       : Operator<Context>(operator_def, ws),
         ws_(ws),
         absolute_path_(
@@ -86,8 +86,7 @@ class LoadOp final : public Operator<Context> {
         allow_incomplete_(
             this->template GetSingleArgument<bool>("allow_incomplete", false)),
         blob_names_(
-            this->template GetRepeatedArgument<string>("source_blob_names")),
-        shape_(this->template GetRepeatedArgument<int64_t>("shape")) {
+            this->template GetRepeatedArgument<string>("source_blob_names")) {
     if (InputSize() == 0) {
       CAFFE_ENFORCE_GT(db_type_.size(), 0, "Must specify a db type.");
       if (db_names_.empty()) {
@@ -106,20 +105,17 @@ class LoadOp final : public Operator<Context> {
         db_name_ = "";
       }
     }
-    CAFFE_ENFORCE(
-        blob_names_.empty() || blob_names_.size() == OutputSize(),
-        "Number of output blobs and source_blob_names mismatch.");
-    CAFFE_ENFORCE(
-        blob_names_.empty() || strip_prefix_.empty(),
+    CAFFE_ENFORCE(blob_names_.empty() || blob_names_.size() == OutputSize(),
+      "Number of output blobs and source_blob_names mismatch.");
+    CAFFE_ENFORCE(blob_names_.empty() || strip_prefix_.empty(),
         "strip_prefix and source_blob_names are mutually exclusive.");
-    CAFFE_ENFORCE(
-        blob_names_.empty() || !load_all_,
+    CAFFE_ENFORCE(blob_names_.empty() || !load_all_,
         "cannot load_all_ while using source_blob_names.");
     if (!load_all_) {
       // blob_names_ will be filled with ''source blob names'' in file/db
       // if argument source_blob_names is not given, then blob_names_ is
       // inferred from operator output
-      if (blob_names_.empty()) {
+      if(blob_names_.empty()) {
         for (const string& name : operator_def.output()) {
           blob_names_.push_back(name);
         }
@@ -127,10 +123,8 @@ class LoadOp final : public Operator<Context> {
       int idx = 0;
       std::set<std::string> name_set;
       for (const string& name : blob_names_) {
-        CAFFE_ENFORCE(
-            name_set.insert(name).second,
-            "Duplicated source blob name: ",
-            name);
+        CAFFE_ENFORCE(name_set.insert(name).second,
+            "Duplicated source blob name: ", name);
         output_indices_[name] = idx++;
       }
     }
@@ -153,13 +147,7 @@ class LoadOp final : public Operator<Context> {
             : (ws_->RootFolder() + "/" + db_names_[i]);
         std::unique_ptr<DB> in_db(
             caffe2::db::CreateDB(db_type_, full_db_name, caffe2::db::READ));
-        CAFFE_ENFORCE(
-            in_db.get(),
-            "Cannot find db implementation of type ",
-            db_type_,
-            " (while trying to open ",
-            full_db_name,
-            ")");
+        CAFFE_ENFORCE(in_db.get(), "Cannot open db: ", full_db_name);
         std::unique_ptr<Cursor> cursor(in_db->NewCursor());
         extract(i, cursor.get(), &blob_states, &total_loaded_blobs);
       }
@@ -167,19 +155,8 @@ class LoadOp final : public Operator<Context> {
 
     validateBlobStates(blob_states);
     // Loaded all the needed blobs.
-    if (!load_all_ && total_loaded_blobs == OutputSize()) {
+    if (load_all_ || total_loaded_blobs == OutputSize()) {
       VLOG(1) << "Loaded " << total_loaded_blobs << " blobs fully from db(s)";
-      return true;
-    }
-
-    if (load_all_) {
-      for (const string& name : this->debug_def().output()) {
-        CAFFE_ENFORCE(
-            blob_states.count(name),
-            "Output blob name ",
-            name,
-            " does not exist in the db(s).");
-      }
       return true;
     }
 
@@ -425,14 +402,13 @@ class LoadOp final : public Operator<Context> {
   std::map<string, int> output_indices_;
   std::map<string, int> key_to_dbid_;
   std::vector<std::string> blob_names_;
-  std::vector<int64_t> shape_;
 };
 
 template <class Context>
 class SaveOp final : public Operator<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
-  explicit SaveOp(const OperatorDef& operator_def, Workspace* ws)
+  SaveOp(const OperatorDef& operator_def, Workspace* ws)
       : Operator<Context>(operator_def, ws),
         ws_(ws),
         absolute_path_(
@@ -484,13 +460,7 @@ class SaveOp final : public Operator<Context> {
         absolute_path_ ? db_name_ : (ws_->RootFolder() + "/" + db_name_);
     std::unique_ptr<DB> out_db(
         caffe2::db::CreateDB(db_type_, full_db_name, caffe2::db::NEW));
-    CAFFE_ENFORCE(
-        out_db.get(),
-        "Cannot find db implementation of type ",
-        db_type_,
-        " (while trying to open ",
-        full_db_name,
-        ")");
+    CAFFE_ENFORCE(out_db.get(), "Cannot open db for writing: ", full_db_name);
 
     BlobSerializerBase::SerializationAcceptor acceptor = [&](
         const std::string& blobName, const std::string& data) {
@@ -503,8 +473,6 @@ class SaveOp final : public Operator<Context> {
     };
 
     const vector<const Blob*>& inputs = OperatorBase::Inputs();
-    VLOG(0) << "Saving " << inputs.size() << " inputs to " << db_type_ << ": "
-            << full_db_name;
     for (int i = 0; i < inputs.size(); ++i) {
       SerializeBlob(*inputs[i], blob_names_[i], acceptor, chunk_size_);
     }
@@ -553,7 +521,7 @@ string FormatString(const string& pattern, Ts... values) {
 template <class Context>
 class CheckpointOp final : public Operator<Context> {
  public:
-  explicit CheckpointOp(const OperatorDef& operator_def, Workspace* ws)
+  CheckpointOp(const OperatorDef& operator_def, Workspace* ws)
       : Operator<Context>(operator_def, ws),
         db_pattern_(this->template GetSingleArgument<string>("db", "")),
         every_(this->template GetSingleArgument<int>("every", 1)),

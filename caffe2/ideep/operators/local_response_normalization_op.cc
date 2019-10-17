@@ -1,8 +1,6 @@
 #include <caffe2/ideep/ideep_utils.h>
 
-using namespace caffe2;
-
-namespace {
+namespace caffe2 {
 
 class IDEEPLRNOp final : public IDEEPOperator {
  public:
@@ -21,7 +19,7 @@ class IDEEPLRNOp final : public IDEEPOperator {
     DCHECK_GT(alpha_, 0);
     DCHECK_GT(beta_, 0);
   }
-  ~IDEEPLRNOp() override {}
+  virtual ~IDEEPLRNOp() {}
 
   bool RunOnDevice() override {
     auto& X = Input(INPUT);
@@ -60,7 +58,7 @@ class IDEEPLRNGradientOp final : public IDEEPOperator {
     DCHECK_GT(alpha_, 0);
     DCHECK_GT(beta_, 0);
   }
-  ~IDEEPLRNGradientOp() override {}
+  virtual ~IDEEPLRNGradientOp() {}
 
   bool RunOnDevice() override {
     const auto& X = Input(INPUT);
@@ -88,4 +86,4 @@ class IDEEPLRNGradientOp final : public IDEEPOperator {
 REGISTER_IDEEP_OPERATOR(LRN, IDEEPLRNOp);
 REGISTER_IDEEP_OPERATOR(LRNGradient, IDEEPLRNGradientOp);
 
-} // namespace
+} // namespace caffe2

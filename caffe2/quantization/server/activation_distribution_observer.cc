@@ -285,12 +285,10 @@ HistogramNetObserver::HistogramNetObserver(
     NetBase* subject,
     const string& out_file_name,
     int nbins,
-    int dump_freq,
-    bool mul_nets)
+    int dump_freq)
     : NetObserver(subject),
       dump_freq_(dump_freq),
       cnt_(0),
-      mul_nets_(mul_nets),
       out_file_name_(out_file_name) {
   hist_infos_.resize(subject->GetOperators().size());
 
@@ -315,15 +313,9 @@ HistogramNetObserver::HistogramNetObserver(
 void HistogramNetObserver::DumpAndReset_(
     const string& out_file_name,
     bool print_total_min_max) {
-  stringstream file_name;
-  file_name << out_file_name;
-  if (mul_nets_) {
-    file_name << ".";
-    file_name << this;
-  }
-  ofstream f(file_name.str());
+  ofstream f(out_file_name);
   if (!f) {
-    LOG(WARNING) << this << ": can't open " << file_name.str();
+    LOG(WARNING) << this << ": can't open " << out_file_name;
   }
 
   for (int op_index = 0; op_index < hist_infos_.size(); ++op_index) {
@@ -342,10 +334,6 @@ void HistogramNetObserver::DumpAndReset_(
                      << " has an empty range: min " << hist->Min()
                      << " and max " << hist->Max();
       }
-      if (hist->GetHistogram()->empty()) {
-        LOG(WARNING) << "Histogram of "
-                     << info->min_max_info.tensor_infos[i].name << " is empty";
-      }
 
       ostringstream ost;
       ost << op_index << " " << info->min_max_info.type << " " << i << " "
@@ -356,11 +344,15 @@ void HistogramNetObserver::DumpAndReset_(
         ost << " " << c;
       }
 
+      f << ost.str() << endl;
       if (print_total_min_max) {
         LOG(INFO) << this << " " << ost.str();
       }
 
-      f << ost.str() << endl;
+      if (hist->GetHistogram()->empty()) {
+        LOG(WARNING) << "Histogram of "
+                     << info->min_max_info.tensor_infos[i].name << " is empty";
+      }
 
       if (!print_total_min_max) {
         info->histograms[i] = DynamicHistogram(hist->GetHistogram()->size());
@@ -505,8 +497,7 @@ RegisterQuantizationParamsWithHistogramNetObserver::
     ++nwords_first_line;
   }
 
-  ist.str(first_line);
-  ist.clear();
+  ist = istringstream(first_line);
 
   bool new_format = true;
   int op_index, i, nbins;
@@ -514,8 +505,7 @@ RegisterQuantizationParamsWithHistogramNetObserver::
   float min, max;
   ist >> op_index >> op_type >> i >> tensor_name >> min >> max >> nbins;
   if (nwords_first_line != nbins + 7) {
-    ist.str(first_line);
-    ist.clear();
+    ist = istringstream(first_line);
     ist >> op_index >> i >> tensor_name >> min >> max >> nbins;
     if (nwords_first_line == nbins + 6) {
       new_format = false;
@@ -569,22 +559,14 @@ RegisterQuantizationParamsWithHistogramNetObserver::
 
       Histogram hist = Histogram(min, max, bins);
 
-      LOG(INFO) << "Choosing qparams for " << tensor_name;
       TensorQuantizationParams qparams;
       if (max > min) {
         unique_ptr<QuantizationFactory> qfactory(GetQuantizationFactoryOf(op));
         qparams = qfactory->ChooseQuantizationParams(hist, is_weight);
       } else {
         qparams.scale = 0.1f;
+        qparams.zero_point = -min / qparams.scale;
         qparams.precision = 8;
-        qparams.zero_point =
-            (isinf(min / qparams.scale) || isnan(min / qparams.scale))
-            ? 0
-            : std::max(
-                  0,
-                  std::min(
-                      int((-min) / qparams.scale),
-                      (1 << qparams.precision) - 1));
       }
 
       if (HasDNNLowPEngine_(*op)) {

@@ -1,6 +1,6 @@
 #include <torch/csrc/cuda/nccl.h>
 #include <torch/csrc/cuda/device_set.h>
-#include <ATen/core/functional.h>
+#include <torch/csrc/utils/functional.h>
 #include <torch/csrc/utils/hash.h>
 
 #include <ATen/ATen.h>
@@ -70,7 +70,7 @@ using device_list = std::vector<int>;
 static std::unordered_map<device_list, NcclCommList, torch::hash<device_list>>
     _communicators;
 
-ArrayRef<ncclComm_t> get_communicators(TensorList inputs) {
+ArrayRef<ncclComm_t> _get_communicators(TensorList inputs) {
   static auto get_device = [](const at::Tensor& t) -> int {
     return t.get_device();
   };
@@ -81,11 +81,11 @@ ArrayRef<ncclComm_t> get_communicators(TensorList inputs) {
   return it->second.ref();
 }
 
-ncclDataType_t get_data_type(const Tensor& t) {
-  if (t.type().backend() != Backend::CUDA) {
+ncclDataType_t _get_data_type(const Type& type) {
+  if (type.backend() != Backend::CUDA) {
     throw std::runtime_error("Unconvertible NCCL type");
   }
-  switch (t.scalar_type()) {
+  switch (type.scalarType()) {
     case at::kFloat:
       return ncclFloat;
     case at::kHalf:
@@ -105,7 +105,7 @@ ncclDataType_t get_data_type(const Tensor& t) {
   }
 }
 
-void check_inputs(
+void _check_inputs(
     TensorList inputs,
     TensorList outputs,
     int input_multiplier,
@@ -126,7 +126,7 @@ void check_inputs(
 
   device_set devices;
   int64_t numel = inputs[0].numel();
-  auto type = inputs[0].type();
+  auto& type = inputs[0].type();
 
   for (size_t i = 0; i < len; i++) {
     auto input = inputs[i];
@@ -178,7 +178,7 @@ bool is_available(TensorList tensors) {
 #ifdef USE_NCCL
   device_set devices;
   for (auto& tensor : tensors) {
-    auto type = tensor.type();
+    auto& type = tensor.type();
     if (!type.is_cuda() || type.is_sparse())
       return false;
     if (!tensor.is_contiguous())
@@ -232,15 +232,17 @@ void broadcast(
     const comm_list& user_comms) {
 #ifdef USE_NCCL
   using namespace torch::cuda::nccl::detail;
-  check_inputs(tensors, tensors, 1, 1);
-  ncclDataType_t data_type = get_data_type(tensors[0]);
+  _check_inputs(tensors, tensors, 1, 1);
+  ncclDataType_t data_type = _get_data_type(tensors[0].type());
   int64_t numel = tensors[0].numel();
 
-  AutoNcclGroup nccl_group_guard;
-  const auto comms = user_comms.empty() ? get_communicators(tensors)
+  std::lock_guard<std::mutex> free_mutex(
+      *(THCCachingAllocator_getCudaFreeMutex()));
+  const auto comms = user_comms.empty() ? _get_communicators(tensors)
                                         : ArrayRef<ncclComm_t>(user_comms);
 
   at::cuda::OptionalCUDAGuard device_guard;
+  AutoNcclGroup nccl_group_guard;
   for (size_t i = 0, num_tensors = tensors.size(); i < num_tensors; i++) {
     int device = tensors[i].get_device();
     device_guard.set_index(device);
@@ -248,7 +250,7 @@ void broadcast(
     const auto stream = (streams.empty() || !streams[i])
         ? at::cuda::getCurrentCUDAStream(device).stream()
         : streams[i]->stream();
-    TORCH_CHECK(
+    AT_CHECK(
         static_cast<uint64_t>(numel) <= static_cast<uint64_t>(count_max),
         "Broadcast tensor has ",
         numel,
@@ -273,20 +275,21 @@ void reduce(
     const comm_list& user_comms) {
 #ifdef USE_NCCL
   using namespace torch::cuda::nccl::detail;
-  TORCH_CHECK(
+  AT_CHECK(
       root >= 0 && static_cast<size_t>(root) < inputs.size(), "invalid root");
 
-  check_inputs(inputs, outputs, 1, 1);
+  _check_inputs(inputs, outputs, 1, 1);
   const auto len = inputs.size();
 
-  ncclDataType_t data_type = get_data_type(inputs[0]);
+  ncclDataType_t data_type = _get_data_type(inputs[0].type());
 
   const auto count = inputs[0].numel();
-  AutoNcclGroup nccl_group_guard;
-  auto comms_ref = user_comms.empty() ? get_communicators(inputs)
+  std::lock_guard<std::mutex> lock(*(THCCachingAllocator_getCudaFreeMutex()));
+  auto comms_ref = user_comms.empty() ? _get_communicators(inputs)
                                       : ArrayRef<ncclComm_t>(user_comms);
 
   at::cuda::OptionalCUDAGuard device_guard;
+  AutoNcclGroup nccl_group_guard;
   for (size_t i = 0; i < len; i++) {
     int device = inputs[i].device().index();
     device_guard.set_index(device);

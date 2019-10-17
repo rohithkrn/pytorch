@@ -13,9 +13,8 @@ template <class Context>
 class ShapeOp : public Operator<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
-  template <class... Args>
-  explicit ShapeOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...),
+  ShapeOp(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<Context>(operator_def, ws),
         axes_(OperatorBase ::GetRepeatedArgument<int>("axes")) {}
 
   bool RunOnDevice() override {

@@ -12,9 +12,8 @@ template <class Context>
 class ReplaceNaNOp final : public Operator<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
-  template <class... Args>
-  explicit ReplaceNaNOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...) {}
+  ReplaceNaNOp(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<Context>(operator_def, ws) {}
 
   bool RunOnDevice() override {
     return DispatchHelper<TensorTypes<float, double>>::call(this, Input(0));

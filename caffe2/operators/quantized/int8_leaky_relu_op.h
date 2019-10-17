@@ -14,8 +14,9 @@ namespace int8 {
 
 class Int8LeakyReluOp final : public Operator<CPUContext> {
  public:
-  explicit Int8LeakyReluOp(const OperatorDef& operator_def, Workspace* ws)
-      : Operator<CPUContext>(operator_def, ws), ws_(ws) {
+  Int8LeakyReluOp(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<CPUContext>(operator_def, ws),
+        ws_(ws) {
     const float alpha = this->template GetSingleArgument<float>("alpha", 0.01);
     CAFFE_ENFORCE_GT(alpha, 0.0);
     CAFFE_ENFORCE_LT(alpha, 1.0);
@@ -61,7 +62,6 @@ class Int8LeakyReluOp final : public Operator<CPUContext> {
         static_cast<uint8_t>(Y_zero_point), Y_scale,
         0 /* output min */,
         255 /* output max */,
-        0 /* flags */,
         &qnnpackOperator_);
       CAFFE_ENFORCE(
           createStatus == qnnp_status_success,

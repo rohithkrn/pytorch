@@ -6,8 +6,7 @@
 
 #include "caffe2/serialize/inline_container.h"
 
-namespace caffe2 {
-namespace serialize {
+namespace at {
 namespace {
 
 TEST(PyTorchStreamWriterAndReader, SaveAndLoad) {
@@ -15,7 +14,7 @@ TEST(PyTorchStreamWriterAndReader, SaveAndLoad) {
 
   std::ostringstream oss;
   // write records through writers
-  PyTorchStreamWriter writer(&oss);
+  torch::jit::PyTorchStreamWriter writer(&oss);
   std::array<char, 127> data1;
 
   for (int i = 0; i < data1.size(); ++i) {
@@ -38,10 +37,7 @@ TEST(PyTorchStreamWriterAndReader, SaveAndLoad) {
   std::istringstream iss(the_file);
 
   // read records through readers
-  PyTorchStreamReader reader(&iss);
-  ASSERT_TRUE(reader.hasRecord("key1"));
-  ASSERT_TRUE(reader.hasRecord("key2"));
-  ASSERT_FALSE(reader.hasRecord("key2000"));
+  torch::jit::PyTorchStreamReader reader(&iss);
   at::DataPtr data_ptr;
   int64_t size;
   std::tie(data_ptr, size) = reader.getRecord("key1");
@@ -50,6 +46,7 @@ TEST(PyTorchStreamWriterAndReader, SaveAndLoad) {
   ASSERT_EQ(memcmp(data_ptr.get(), data1.data(), data1.size()), 0);
   ASSERT_EQ(memcmp(the_file.c_str() + off1, data1.data(), data1.size()), 0);
   ASSERT_EQ(off1 % kFieldAlignment, 0);
+
 
   std::tie(data_ptr, size) = reader.getRecord("key2");
   size_t off2 = reader.getRecordOffset("key2");
@@ -61,5 +58,4 @@ TEST(PyTorchStreamWriterAndReader, SaveAndLoad) {
 }
 
 } // namespace
-} // namespace serialize
-} // namespace caffe2
+} // namespace at

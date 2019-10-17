@@ -12,9 +12,8 @@ template <typename T, class Context>
 class DropoutOp final : public Operator<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
-  template <class... Args>
-  explicit DropoutOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...),
+  DropoutOp(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<Context>(operator_def, ws),
         ratio_(this->template GetSingleArgument<float>("ratio", 0.5)),
         is_test_(
             this->template GetSingleArgument<int>(OpSchema::Arg_IsTest, 0)) {
@@ -34,9 +33,8 @@ template <typename T, class Context>
 class DropoutGradientOp final : public Operator<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
-  template <class... Args>
-  explicit DropoutGradientOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...),
+  DropoutGradientOp(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<Context>(operator_def, ws),
         ratio_(this->template GetSingleArgument<float>("ratio", 0.5)),
         is_test_(
             this->template GetSingleArgument<int>(OpSchema::Arg_IsTest, 0)) {

@@ -23,14 +23,13 @@ void Adagrad::step() {
       continue;
     }
 
-    if (options.weight_decay() > 0) {
-      NoGradGuard guard;
-      p.grad() = p.grad() + options.weight_decay() * p;
+    if (options.weight_decay_ > 0) {
+      p.grad() = p.grad() + options.weight_decay_ * p;
     }
 
     buffer_at(step_buffers, i) += 1.0;
-    const auto clr = options.learning_rate() /
-        (1.0 + (buffer_at(step_buffers, i) - 1.0) * options.lr_decay());
+    const auto clr = options.learning_rate_ /
+        (1.0 + (buffer_at(step_buffers, i) - 1.0) * options.lr_decay_);
 
     auto& sum = buffer_at(sum_buffers, i);
     sum.addcmul_(p.grad(), p.grad(), 1.0);

@@ -6,15 +6,12 @@
 
 namespace caffe2 {
 
-std::vector<std::string>
-split(char separator, const std::string& string, bool ignore_empty) {
+std::vector<std::string> split(char separator, const std::string& string) {
   std::vector<std::string> pieces;
   std::stringstream ss(string);
   std::string item;
   while (getline(ss, item, separator)) {
-    if (!ignore_empty || !item.empty()) {
-      pieces.push_back(std::move(item));
-    }
+    pieces.push_back(std::move(item));
   }
   return pieces;
 }

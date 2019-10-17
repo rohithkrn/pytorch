@@ -3,10 +3,15 @@
 #include <THC/THCThrustAllocator.cuh>
 #include <thrust/unique.h>
 #include <TH/THHalf.h>
-#include <THC/THCNumerics.cuh>
+#include <THCUNN/THCHalfAutoNumerics.cuh>
 #include <THC/THCTensorSort.cuh>
 #include <THC/THCTensorMathReduce.cuh>
-#include <c10/macros/Macros.h>
+
+#ifdef __HIP_PLATFORM_HCC__
+const int WARP_SIZE = 64;
+#else
+const int WARP_SIZE = 32;
+#endif
 
 template
   <typename Dtype,
@@ -22,8 +27,8 @@ __global__ void cunn_LookupTable_accGradParametersKernelByFeature
 {
   extern __shared__ char buf[];
   Acctype* smem = (Acctype*)buf;
-  Acctype* my_s = smem + C10_WARP_SIZE*threadIdx.y;
-  int* indices_batch = (int*)(buf + sizeof(Acctype)*C10_WARP_SIZE*blockDim.y);
+  Acctype* my_s = smem + WARP_SIZE*threadIdx.y;
+  int* indices_batch = (int*)(buf + sizeof(Acctype)*WARP_SIZE*blockDim.y);
 
   const int s = (int)stride; // OK to make int, we don't expect 2 billion+ embedding row size
 
@@ -34,7 +39,7 @@ __global__ void cunn_LookupTable_accGradParametersKernelByFeature
     // Entire block cooperates to load a batch of 1024 indices to process
     int tid = threadIdx.x + threadIdx.y*blockDim.x;
     if(batch_start + tid < n)
-      indices_batch[tid] = (int)(indices[batch_start + tid]);
+      indices_batch[tid] = (int)(indices[batch_start + tid] - TH_INDEX_BASE);
 
     // Loop over the batch of <= 1024 loaded indices in chunks of blockDim.y = 32
     for(int chunk_start = batch_start; chunk_start < n; chunk_start += blockDim.y)
@@ -49,7 +54,7 @@ __global__ void cunn_LookupTable_accGradParametersKernelByFeature
       int dst_row = indices_batch[src_row - batch_start]; // This warp's target row in grad_weight
 
       // All warps load their smem segments with incoming grad data
-      if(src_row < n && f < s && dst_row != padding_idx)
+      if(src_row < n && f < s && dst_row != padding_idx - TH_INDEX_BASE)
         my_s[threadIdx.x] =  ScalarConvert<Dtype, Acctype>::to(scale*grad[src_row*stride + f]);
 
       __syncthreads();
@@ -59,7 +64,7 @@ __global__ void cunn_LookupTable_accGradParametersKernelByFeature
       // If so, we elect the first warp in each matching group as the leader.
       // Each leader warp serializes the accumulates targeting dst_row in shared memory,
       // then finishes by adding the accumulated buffer to dst_row in grad_weight.
-      if(dst_row != padding_idx && src_row < n) // Per-warp exit condition
+      if(dst_row != padding_idx - TH_INDEX_BASE && src_row < n) // Per-warp exit condition
       {
         int match_found_this_thread =
           (dst_row == indices_batch[chunk_start - batch_start + threadIdx.x]);
@@ -83,7 +88,7 @@ __global__ void cunn_LookupTable_accGradParametersKernelByFeature
 #else
             first_remaining_peer = __ffs(matchmask) - 1;
 #endif
-            my_s[threadIdx.x] += smem[threadIdx.x + C10_WARP_SIZE*first_remaining_peer];
+	    my_s[threadIdx.x] += smem[threadIdx.x + WARP_SIZE*first_remaining_peer];
             matchmask ^= (1 << first_remaining_peer);
           }
           if(f < s)
@@ -120,8 +125,8 @@ __global__ void cunn_LookupTable_accGradParametersKernel(
       && input[idx] != paddingValue) {
     do {
       const int startFeature = threadIdx.x + blockIdx.y * blockDim.x * SZ;
-      const int weightRow = ((int) input[idx]) * stride;
-      const int gradOutputRow = ((int) indices[idx]) * stride;
+      const int weightRow = ((int) input[idx] - TH_INDEX_BASE) * stride;
+      const int gradOutputRow = ((int) indices[idx] - TH_INDEX_BASE) * stride;
       const Acctype scale = count ? ScalarConvert<Dtype, Acctype>::to(defaultScale) / count[idx] : ScalarConvert<Dtype, Acctype>::to(defaultScale);
 
       Acctype gradient[SZ];
@@ -130,7 +135,7 @@ __global__ void cunn_LookupTable_accGradParametersKernel(
       #pragma unroll
       for (int ii = 0; ii < SZ; ii++)
       {
-        int featureDim = startFeature + ii * C10_WARP_SIZE;
+        int featureDim = startFeature + ii * WARP_SIZE;
         if (featureDim < stride)
         {
           gradient[ii] = ScalarConvert<Dtype, Acctype>::to(gradOutput[gradOutputRow + featureDim]);
@@ -147,7 +152,7 @@ __global__ void cunn_LookupTable_accGradParametersKernel(
       #pragma unroll
       for (int ii = 0; ii < SZ; ii++)
       {
-        int featureDim = startFeature + ii * C10_WARP_SIZE;
+        int featureDim = startFeature + ii * WARP_SIZE;
         if (featureDim < stride)
         {
           gradWeight[weightRow + featureDim] = ScalarConvert<Acctype, Dtype>::to(weight[ii]);
@@ -203,7 +208,7 @@ void calculate_norms_and_renorm(DType *weights,
   AccType *sdata = reinterpret_cast<AccType *>(smem);
 
   IndexType tid = threadIdx.x;
-  IndexType baseIndex = (indices[blockIdx.x]) * dim;
+  IndexType baseIndex = (indices[blockIdx.x] - TH_INDEX_BASE) * dim;
 
   AccType accZero = ScalarConvert<int, AccType>::to(0);
   AccType v = accZero;

@@ -3,7 +3,6 @@
 // STOP!!! Thinking of including this header directly?  Please
 // read Note [TH abstraction violation]
 
-#include <c10/core/Storage.h>
 #include <c10/core/StorageImpl.h>
 #include <TH/THStorageFunctions.h>
 

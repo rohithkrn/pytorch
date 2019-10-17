@@ -31,14 +31,12 @@ class Filler {
     for (const auto& item : *input_data) {
       bytes += item.nbytes();
     }
-    if (bytes == 0) {
-      LOG(WARNING) << "0 input bytes filled";
-    }
+    CAFFE_ENFORCE(bytes > 0, "input bytes should be positive");
 
     return bytes;
   }
 
-  const std::vector<std::string>& get_input_names() const {
+  std::vector<std::string> get_input_names() const {
     CAFFE_ENFORCE(!input_names_.empty(), "input names is not initialized");
     return input_names_;
   }
@@ -79,11 +77,6 @@ class DataNetFiller : public Filler {
   const NetDef data_net_;
 };
 
-void fill_with_type(
-    const TensorFiller& filler,
-    const std::string& type,
-    TensorCPU* output);
-
 /*
  * @run_net: the predict net with parameter and input names
  * @input_dims: the input dimentions of all operator inputs of run_net
@@ -100,12 +93,15 @@ class DataRandomFiller : public Filler {
 
   void fill_parameter(Workspace* ws) const override;
 
-  static TensorFiller get_tensor_filler(
+ protected:
+  DataRandomFiller() {}
+
+  TensorFiller get_tensor_filler(
       const OperatorDef& op_def,
       int input_index,
       const std::vector<std::vector<int64_t>>& input_dims) {
     Workspace ws;
-    for (int i = 0; i < op_def.input_size(); ++i) {
+    for (size_t i = 0; i < op_def.input_size(); ++i) {
       // CreateOperator requires all input blobs present
       ws.CreateBlob(op_def.input(i));
     }
@@ -118,9 +114,6 @@ class DataRandomFiller : public Filler {
     auto filler = schema->InputFillers(input_dims)[input_index];
     return filler;
   }
-
- protected:
-  DataRandomFiller() {}
 
   using filler_type_pair_t = std::pair<TensorFiller, std::string>;
   std::unordered_map<std::string, filler_type_pair_t> parameters_;
@@ -142,13 +135,6 @@ class TestDataRandomFiller : public DataRandomFiller {
   // Fill input directly to the workspace.
   void fillInputToWorkspace(Workspace* workspace) const;
 };
-
-// Convenient helpers to fill data to workspace.
-CAFFE2_API void fillRandomNetworkInputs(
-    const NetDef& net,
-    const std::vector<std::vector<std::vector<int64_t>>>& inputDims,
-    const std::vector<std::vector<std::string>>& inputTypes,
-    Workspace* workspace);
 
 } // namespace emulator
 } // namespace caffe2

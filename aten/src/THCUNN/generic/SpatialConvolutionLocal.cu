@@ -53,7 +53,7 @@ static THCTensor* THNN_(view_weight_local)(
                  THCTensor *_weight)
 {
   THCTensor *weight = THCTensor_(newContiguous)(state, _weight);
-  TORCH_CHECK(!weight->is_empty() && (weight->dim() == 3 || weight->dim() == 6), 4,
+  AT_CHECK(!weight->is_empty() && (weight->dim() == 3 || weight->dim() == 6), 4,
            "weight tensor should be (non-empty) 3D or 6D - got size: ", weight->sizes());
   if (weight->dim() == 6) {
     int64_t s1 = weight->size(0) * weight->size(1);
@@ -131,14 +131,13 @@ void THNN_(SpatialConvolutionLocal_updateOutput)(
     THCTensor_(select)(state, output_n, output, 0, elt);
 
     // Extract columns:
-    at::native::im2col<scalar_t>(
+    im2col(
       THCState_getCurrentStream(state),
       THCTensor_(data)(state, input_n),
       nInputPlane, inputHeight, inputWidth,
       outputHeight, outputWidth,
       kH, kW, padH, padW, dH, dW,
-      1, 1, 
-      finput_n->data<scalar_t>()
+      1, 1, THCTensor_(data)(state, finput_n)
     );
 
     output3d = THCTensor_(newWithStorage3d)(state, THTensor_getStoragePtr(output_n), output_n->storage_offset(),
@@ -155,11 +154,9 @@ void THNN_(SpatialConvolutionLocal_updateOutput)(
 
     // weight:    oH*oW x nOutputPlane x nInputPlane*kH*kW
     // finput3d:  oH*oW x nInputPlane*kH*kW x 1
-    THCTensor_(baddbmm)(state, output3d,
-                        output3d,
-                        weight, finput3d,
-                        ScalarConvert<int, scalar_t>::to(1),
-                        ScalarConvert<int, scalar_t>::to(1));
+    THCTensor_(baddbmm)(state, output3d, ScalarConvert<int, scalar_t>::to(1),
+                        output3d, ScalarConvert<int, scalar_t>::to(1),
+                        weight, finput3d);
     // output3d:  oH*oW x nOutputPlane x 1
 
     THCTensor_(free)(state, output3d);
@@ -262,14 +259,13 @@ void THNN_(SpatialConvolutionLocal_updateGradInput)(
     // weight:        oH*oW x nInputPlane*kH*kW x nOutputPlane
     // gradOutput3d:  oH*oW x nOutputPlane x 1
     THCTensor_(baddbmm)(state, fgradInput3d,
-                        fgradInput3d,
-                        tweight, gradOutput3d,
                         ScalarConvert<int, scalar_t>::to(0),
-                        ScalarConvert<int, scalar_t>::to(1));
+                        fgradInput3d, ScalarConvert<int, scalar_t>::to(1),
+                        tweight, gradOutput3d);
     // fgradInput3d:  oH*oW x nInputPlane*kH*kW x 1
 
     // Unpack columns back into input:
-    at::native::col2im<scalar_t, accreal>(
+    col2im<scalar_t, accreal>(
       THCState_getCurrentStream(state),
       THCTensor_(data)(state, fgradInput_n),
       nInputPlane, inputHeight, inputWidth, outputHeight, outputWidth, kH, kW, padH, padW, dH, dW,
@@ -372,21 +368,19 @@ void THNN_(SpatialConvolutionLocal_accGradParameters)(
                                              kW*kH*nInputPlane, outputHeight*outputWidth);
 
     // Extract columns:
-    at::native::im2col<scalar_t>(
+    im2col(
       THCState_getCurrentStream(state),
       THCTensor_(data)(state, input_n),
       nInputPlane, inputHeight, inputWidth,
       outputHeight, outputWidth,
       kH, kW, padH, padW, dH, dW,
-      1, 1, 
-      finput_n->data<scalar_t>()
+      1, 1, THCTensor_(data)(state, finput_n)
     );
 
     // gradOutput3d:  oH*oW x nOutputPlane x 1
     // finput3d:      oH*oW x 1 x kW*kH*nInputPlane
-    THCTensor_(baddbmm)(state, gradWeight,
-                        gradWeight, gradOutput3d, finput3d,
-                        ScalarConvert<int, scalar_t>::to(1), scale);
+    THCTensor_(baddbmm)(state, gradWeight, ScalarConvert<int, scalar_t>::to(1),
+                        gradWeight, scale, gradOutput3d, finput3d);
     // gradWeight:    oH*oW x nOutputPlane x kW*kH*nInputPlane
 
     THCTensor_(cadd)(state, gradBias, gradBias, scale, gradOutput_n);

@@ -127,7 +127,7 @@ Therefore, representation of a SparseTensor of sparse_dim = 0 is simply a dense 
     .. method:: sub
     .. method:: sub_
     .. method:: t_
-    .. method:: to_dense
+    .. method:: toDense
     .. method:: transpose
     .. method:: transpose_
     .. method:: zero_

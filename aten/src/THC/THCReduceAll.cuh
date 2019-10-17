@@ -10,7 +10,6 @@
 //
 
 #include <THC/THCReduceApplyUtils.cuh>
-#include <c10/macros/Macros.h>
 
 // Size per each reduction block
 #define THC_REDUCE_ALL_BLOCK_SIZE 1024L
@@ -26,9 +25,6 @@ template <typename T,
           typename ReduceOp,
           int ADims>
 __global__ void
-#if defined(__HIP_PLATFORM_HCC__)
-C10_LAUNCH_BOUNDS_1(THC_REDUCE_ALL_BLOCK_SIZE)
-#endif
 kernelReduceAll(TensorInfo<T, IndexType> in,
                 IndexType totalElements,
                 AccT init,
@@ -73,9 +69,6 @@ template <typename T,
           typename ModifyOp,
           typename ReduceOp,
           int ADims>
-#if defined(__HIP_PLATFORM_HCC__)
-C10_LAUNCH_BOUNDS_1(THC_REDUCE_ALL_BLOCK_SIZE)
-#endif
 __global__ void
 kernelReduceAllPass1(TensorInfo<T, IndexType> in,
                      IndexType totalElements,
@@ -106,9 +99,6 @@ kernelReduceAllPass1(TensorInfo<T, IndexType> in,
 }
 
 template <typename T, typename ReduceOp>
-#if defined(__HIP_PLATFORM_HCC__)
-C10_LAUNCH_BOUNDS_1(THC_REDUCE_ALL_BLOCK_SIZE)
-#endif
 __global__ void
 kernelReduceAllPass2(int numPass1Blocks,
                      T init,
@@ -305,7 +295,7 @@ bool THC_reduceAll(THCState* state,
 
     /*
     Only instantiates the all 1D special case and the fallback all nD case for
-    large (64-bit indexed) tensors to reduce compilation time.
+    large (64-bit indexed) tensors to reduce compilation time. 
     */
     if (inInfo.dims == 1) {
       HANDLE_IN_CASE(uint64_t, 1);

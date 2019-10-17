@@ -34,12 +34,7 @@ template <typename ContextType, typename TensorType>
 void writeTextOutput(
     TensorType* tensor,
     const string& output_prefix,
-    const string& name,
-    int index,
-    int num_blobs) {
-  if (index >= num_blobs) {
-    return;
-  }
+    const string& name) {
   string filename = name;
   std::replace(filename.begin(), filename.end(), '/', '_');
   string output_name = output_prefix + "/" + filename + ".txt";
@@ -82,19 +77,10 @@ void writeTextOutput(
   }
   // remove the last ,
   string str = line.str();
-  if(str.length() != 0) {
-    str.pop_back();
-  }
+  str.pop_back();
   lines.push_back(str);
 
-  // static casts are workaround for MSVC build
-  auto flags = static_cast<std::ios_base::openmode>(std::ios::out);
-  if (index != 0) {
-    flags |= static_cast<std::ios_base::openmode>(std::ios::app);
-  } else {
-    flags |= static_cast<std::ios_base::openmode>(std::ios::trunc);
-  }
-  std::ofstream output_file(output_name, flags);
+  std::ofstream output_file(output_name);
   std::ostream_iterator<std::string> output_iterator(output_file, "\n");
   std::copy(lines.begin(), lines.end(), output_iterator);
 }
@@ -103,42 +89,35 @@ void observerConfig();
 bool backendCudaSet(const string&);
 void setDeviceType(caffe2::NetDef*, caffe2::DeviceType&);
 void setOperatorEngine(caffe2::NetDef*, const string&);
-int loadInput(
-    shared_ptr<caffe2::Workspace> workspace,
-    const bool run_on_gpu,
-    map<string, caffe2::TensorProtos>& tensor_protos_map,
-    const string& input,
-    const string& input_file,
-    const string& input_dims,
-    const string& input_type);
+void loadInput(
+    shared_ptr<caffe2::Workspace>,
+    const bool,
+    map<string, caffe2::TensorProtos>&,
+    const string&,
+    const string&,
+    const string&,
+    const string&);
 void fillInputBlob(
-    shared_ptr<caffe2::Workspace> workspace,
-    map<string, caffe2::TensorProtos>& tensor_protos_map,
+    shared_ptr<caffe2::Workspace>,
+    map<string, caffe2::TensorProtos>&,
     int iteration);
 void writeOutput(
-    shared_ptr<caffe2::Workspace> workspace,
-    const bool run_on_gpu,
-    const string& output,
-    const string& output_folder,
-    const bool text_output,
-    const int index,
-    const int num_blobs);
+    shared_ptr<caffe2::Workspace>,
+    const bool,
+    const string&,
+    const string&,
+    const bool);
 void runNetwork(
-    shared_ptr<caffe2::Workspace> workspace,
-    caffe2::NetBase* net,
-    map<string, caffe2::TensorProtos>& tensor_protos_map,
-    const bool wipe_cache,
-    const bool run_individual,
-    const bool run_on_gpu,
-    const bool text_output,
-    const int warmup,
-    const int iter,
-    const int num_blobs,
-    const int sleep_before_run,
-    const int sleep_between_iteration,
-    const int sleep_between_net_and_operator,
-    const std::string& output,
-    const std::string& output_folder);
+    shared_ptr<caffe2::Workspace>,
+    caffe2::NetDef&,
+    map<string, caffe2::TensorProtos>&,
+    const bool,
+    const bool,
+    const int,
+    const int,
+    const int,
+    const int,
+    const int);
 int benchmark(
     int argc,
     char* argv[],
@@ -149,7 +128,6 @@ int benchmark(
     const string& FLAGS_input_file,
     const string& FLAGS_input_type,
     int FLAGS_iter,
-    bool FLAGS_measure_memory,
     const string& FLAGS_net,
     const string& FLAGS_output,
     const string& FLAGS_output_folder,

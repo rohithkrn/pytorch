@@ -14,18 +14,11 @@ class SumElementsOp : public Operator<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
 
-  explicit SumElementsOp(const OperatorDef& operator_def, Workspace* ws)
+  SumElementsOp(const OperatorDef& operator_def, Workspace* ws)
       : Operator<Context>(operator_def, ws),
         average_(this->template GetSingleArgument<bool>("average", false)) {}
-  explicit SumElementsOp(const OperatorDef& operator_def, Workspace* ws, bool average)
+  SumElementsOp(const OperatorDef& operator_def, Workspace* ws, bool average)
       : Operator<Context>(operator_def, ws), average_(average) {}
-#if !defined(CAFFE2_IS_XPLAT_BUILD) && !defined(C10_MOBILE)
-  explicit SumElementsOp(const c10::FunctionSchema& schema, std::vector<c10::IValue> inputs, std::vector<c10::IValue*> outputs)
-      : Operator<Context>(schema, std::move(inputs), std::move(outputs)),
-        average_(this->template GetSingleArgument<bool>("average", false)) {}
-  explicit SumElementsOp(const c10::FunctionSchema& schema, std::vector<c10::IValue> inputs, std::vector<c10::IValue*> outputs, bool average)
-      : Operator<Context>(schema, std::move(inputs), std::move(outputs)), average_(average) {}
-#endif
   ~SumElementsOp() {}
 
   bool RunOnDevice() override {
@@ -58,9 +51,8 @@ class SumElementsIntOp : public Operator<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
 
-  template <class... Args>
-  explicit SumElementsIntOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...) {}
+  SumElementsIntOp(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<Context>(operator_def, ws) {}
   ~SumElementsIntOp() {}
 
   bool RunOnDevice() override {
@@ -82,18 +74,14 @@ class SumElementsGradientOp : public Operator<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
 
-  explicit SumElementsGradientOp(const OperatorDef& operator_def, Workspace* ws)
+  SumElementsGradientOp(const OperatorDef& operator_def, Workspace* ws)
       : Operator<Context>(operator_def, ws),
         average_(this->template GetSingleArgument<bool>("average", false)) {}
-  explicit SumElementsGradientOp(const OperatorDef& operator_def, Workspace* ws, bool average)
+  SumElementsGradientOp(
+      const OperatorDef& operator_def,
+      Workspace* ws,
+      bool average)
       : Operator<Context>(operator_def, ws), average_(average) {}
-#if !defined(CAFFE2_IS_XPLAT_BUILD) && !defined(C10_MOBILE)
-  explicit SumElementsGradientOp(const c10::FunctionSchema& schema, std::vector<c10::IValue> inputs, std::vector<c10::IValue*> outputs)
-      : Operator<Context>(schema, std::move(inputs), std::move(outputs)),
-        average_(this->template GetSingleArgument<bool>("average", false)) {}
-  explicit SumElementsGradientOp(const c10::FunctionSchema& schema, std::vector<c10::IValue> inputs, std::vector<c10::IValue*> outputs, bool average)
-      : Operator<Context>(schema, std::move(inputs), std::move(outputs)), average_(average) {}
-#endif
   ~SumElementsGradientOp() {}
 
   bool RunOnDevice() override;

@@ -1,15 +1,10 @@
 #ifndef CAFFE2_OPERATORS_SEGMENT_REDUCTION_OP_H_
 #define CAFFE2_OPERATORS_SEGMENT_REDUCTION_OP_H_
 
-#include "caffe2/core/export_caffe2_op_to_c10.h"
 #include "caffe2/core/context.h"
 #include "caffe2/core/logging.h"
 #include "caffe2/core/operator.h"
 #include "caffe2/operators/reducer_functors.h"
-
-C10_DECLARE_EXPORT_CAFFE2_OP_TO_C10(LengthsSum);
-C10_DECLARE_EXPORT_CAFFE2_OP_TO_C10(LengthsMean);
-C10_DECLARE_EXPORT_CAFFE2_OP_TO_C10(LengthsMax);
 
 namespace caffe2 {
 
@@ -287,9 +282,8 @@ class AbstractReduceFrontOrBackOp : public Operator<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
 
-  template <class... Args>
-  explicit AbstractReduceFrontOrBackOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...),
+  AbstractReduceFrontOrBackOp(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<Context>(operator_def, ws),
         OP_SINGLE_ARG(int, "num_reduce_dim", num_reduce_dims_, 1) {}
 
   bool RunOnDevice() override {
@@ -359,9 +353,10 @@ class AbstractReduceFrontOrBackGradientOp : public Operator<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
 
-  template <class... Args>
-  explicit AbstractReduceFrontOrBackGradientOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...),
+  AbstractReduceFrontOrBackGradientOp(
+      const OperatorDef& operator_def,
+      Workspace* ws)
+      : Operator<Context>(operator_def, ws),
         OP_SINGLE_ARG(int, "num_reduce_dim", num_reduce_dims_, 1) {}
 
   bool RunOnDevice() override {
@@ -993,9 +988,8 @@ class AbstractUnsortedSegmentOp : public Operator<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
 
-  template <class... Args>
-  explicit AbstractUnsortedSegmentOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...),
+  AbstractUnsortedSegmentOp(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<Context>(operator_def, ws),
         OP_SINGLE_ARG(int, "num_segments", num_segments_, -1) {}
 
   bool RunOnDevice() override {

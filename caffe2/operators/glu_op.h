@@ -8,9 +8,8 @@ namespace caffe2 {
 template <typename T, class Context>
 class GluOp final : public Operator<Context> {
  public:
-  template <class... Args>
-  explicit GluOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...),
+  GluOp(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<Context>(operator_def, ws),
         dim_(this->template GetSingleArgument<int>("dim", -1)) {}
 
   USE_OPERATOR_CONTEXT_FUNCTIONS;

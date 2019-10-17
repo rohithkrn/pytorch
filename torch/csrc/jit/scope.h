@@ -1,7 +1,10 @@
 #pragma once
-#include <ATen/core/interned_strings.h>
-#include <c10/util/intrusive_ptr.h>
+#include <torch/csrc/jit/interned_strings.h>
+#include <torch/csrc/jit/assertions.h>
 #include <torch/csrc/WindowsTorchApiMacro.h>
+#include <c10/macros/Macros.h>
+
+#include <memory>
 
 namespace torch {
 namespace jit {
@@ -15,34 +18,51 @@ namespace jit {
 // will always be valid as long as Graph is alive.
 struct Scope;
 using ScopePtr = c10::intrusive_ptr<Scope>;
-using c10::Symbol;
 
 struct TORCH_API Scope : public c10::intrusive_ptr_target {
- private:
+private:
   ScopePtr parent_;
   Symbol name_;
-  ScopePtr intrusive_from_this();
-
- public:
-  Scope();
-
-  Scope(ScopePtr parent, Symbol name);
-
+  ScopePtr intrusive_from_this() {
+    c10::raw::intrusive_ptr::incref(this); // we are creating a new pointer
+                                           // from a raw `this` pointer
+                                           // so we need to bump the refcount
+                                           // to account for this ownership
+    return c10::intrusive_ptr<Scope>::reclaim(this);
+  }
+public:
+  Scope() {
+    name_ = Symbol::scope("");
+  }
+  Scope(ScopePtr parent, Symbol name) {
+    name_ = name;
+    parent_ = std::move(parent);
+  }
   ScopePtr push(Symbol name);
 
-  ScopePtr parent();
-
-  bool isRoot() const;
-
-  bool isBlank() const;
+  ScopePtr parent() {
+    if (!parent_) {
+      throw std::runtime_error("Cannot get parent from Scope with no parent");
+    }
+    return parent_;
+  }
+  bool isRoot() const {
+    return !parent_;
+  }
+  bool isBlank() const {
+    static const Symbol blank = Symbol::scope("");
+    return isRoot() && name() == blank;
+  }
 
   ScopePtr getRoot();
 
   size_t getDepth();
 
-  Symbol name() const;
+  Symbol name() const {
+    return name_;
+  }
 
-  std::string namesFromRoot(const std::string& separator = "/") const;
+  std::string namesFromRoot(const std::string& separator="/") const;
 };
 
 } // namespace jit

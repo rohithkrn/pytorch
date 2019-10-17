@@ -41,7 +41,6 @@ GetNorm(float begin, float end, float density, NormMinimization::Kind kind) {
   return density * norm;
 }
 
-
 // Filter out outliers in input distributions
 // Exploit the input distributions for the quick search
 TensorQuantizationParams NormMinimization::NonlinearQuantizationParamsSearch(
@@ -53,23 +52,22 @@ TensorQuantizationParams NormMinimization::NonlinearQuantizationParamsSearch(
     return ChooseQuantizationParams(hist, preserve_sparsity, precision);
   }
   VLOG(2) << "Using the nonlinear quantile search";
-
-  float min, max;
-  vector<float> bins_f(dnnlowp::adjust_hist_to_include_zero(hist, &min, &max));
-  int nbins = bins_f.size();
-  float bin_width = (max - min) / nbins;
+  const vector<uint64_t> bins = *hist.GetHistogram();
+  int nbins = bins.size();
   int dst_nbins = 1 << precision;
+  float min = hist.Min(), max = hist.Max();
+  assert(min <= 0.f);
+  assert(max >= 0.f);
+  double bin_width = (max - min) / nbins;
 
-  float org_max = max;
-  float org_min = min;
   // calculate the CDF
   uint64_t total = 0;
-  for (uint64_t x : bins_f) {
+  for (uint64_t x : bins) {
     total += x;
   }
   vector<uint64_t> CDF;
   uint64_t sum = 0;
-  for (uint64_t x : bins_f) {
+  for (uint64_t x : bins) {
     sum += x;
     CDF.push_back(sum);
   }
@@ -129,7 +127,7 @@ TensorQuantizationParams NormMinimization::NonlinearQuantizationParamsSearch(
 
       double dst_bin_of_begin_center =
           dst_bin_of_begin * dst_bin_width + dst_bin_width / 2;
-      double density = bins_f[src_bin] / bin_width;
+      double density = bins[src_bin] / bin_width;
       if (dst_bin_of_begin == dst_bin_of_end) {
         // if src_bin is entirely within 1 dst_bin
         double delta_begin = src_bin_begin - dst_bin_of_begin_center;
@@ -156,24 +154,21 @@ TensorQuantizationParams NormMinimization::NonlinearQuantizationParamsSearch(
     start_bin = next_start_bin;
     end_bin = next_end_bin;
   }
-  VLOG(2) << "best quantiation range " << start_bin << "," << end_bin + 1 << ","
-          << norm_min;
+  VLOG(2) << "best quantization range " << start_bin << "," << end_bin + 1
+          << "," << norm_min;
 
   double selected_sum = 0;
   for (int i = start_bin; i < end_bin + 1; ++i) {
-    selected_sum += bins_f[i];
+    selected_sum += bins[i];
   }
   VLOG(2) << "best quantization range covers "
           << (double)selected_sum / total * 100 << " %%";
 
-  max = min + bin_width * (end_bin + 1);
-  min = min + bin_width * start_bin;
+  min = hist.Min() + bin_width * start_bin;
+  max = hist.Min() + bin_width * (end_bin + 1);
 
-  VLOG(2) << "Org min " << org_min << " org max " << org_max << " found min "
-          << min << " max " << max << " with minimal norm " << norm_min;
   QuantizationFactory* qfactory = QuantizationFactory::GetDefaultInstance();
-  return qfactory->ChooseQuantizationParams(
-      min, max, precision, preserve_sparsity);
+  return qfactory->ChooseQuantizationParams(min, max);
 }
 
 TensorQuantizationParams NormMinimization::ChooseQuantizationParams(
@@ -181,13 +176,17 @@ TensorQuantizationParams NormMinimization::ChooseQuantizationParams(
     bool preserve_sparsity,
     int precision) {
   VLOG(2) << "Using the brute force search";
-  float min, max;
-  vector<float> bins_f(dnnlowp::adjust_hist_to_include_zero(hist, &min, &max));
-  int nbins = bins_f.size();
-  float bin_width = (max - min) / nbins;
-
+  const vector<uint64_t> bins = *hist.GetHistogram();
+  int nbins = bins.size();
+  vector<float> bins_f(nbins);
+  for (int i = 0; i < nbins; ++i) {
+    bins_f[i] = bins[i];
+  }
   int dst_nbins = 1 << precision;
-
+  float min = hist.Min(), max = hist.Max();
+  assert(min <= 0.f);
+  assert(max >= 0.f);
+  float bin_width = (max - min) / nbins;
   int zero_bin = round(-min / bin_width);
 
   vector<pair<int, float>> best_start_bins(nbins + 1);
@@ -248,7 +247,7 @@ TensorQuantizationParams NormMinimization::ChooseQuantizationParams(
 
           float dst_bin_of_begin_center =
               dst_bin_of_begin * dst_bin_width + dst_bin_width / 2;
-          float density = bins_f[src_bin] / bin_width;
+          float density = bins[src_bin] / bin_width;
           float delta_begin = src_bin_begin - dst_bin_of_begin_center;
           if (dst_bin_of_begin == dst_bin_of_end) {
             // if src_bin is entirely within 1 dst_bin
@@ -291,24 +290,23 @@ TensorQuantizationParams NormMinimization::ChooseQuantizationParams(
   }
 
   float total_sum = 0;
-  for (int i = 0; i < bins_f.size(); ++i) {
-    total_sum += bins_f[i];
+  for (int i = 0; i < bins.size(); ++i) {
+    total_sum += bins[i];
   }
   float selected_sum = 0;
   int i_begin = std::max(0, best_start_bin);
   int i_end = std::min(nbins, best_start_bin + best_nbins_selected);
   for (int i = i_begin; i < i_end; ++i) {
-    selected_sum += bins_f[i];
+    selected_sum += bins[i];
   }
   VLOG(2) << "best quantization range covers " << selected_sum / total_sum * 100
           << " %%";
 
-  max = min + bin_width * (best_start_bin + best_nbins_selected);
-  min = min + bin_width * (best_start_bin);
+  min = hist.Min() + bin_width * (best_start_bin);
+  max = hist.Min() + bin_width * (best_start_bin + best_nbins_selected);
 
   QuantizationFactory* qfactory = QuantizationFactory::GetDefaultInstance();
-  return qfactory->ChooseQuantizationParams(
-      min, max, precision, preserve_sparsity);
+  return qfactory->ChooseQuantizationParams(min, max);
 } // ChooseQuantizationParams
 
 } // namespace dnnlowp

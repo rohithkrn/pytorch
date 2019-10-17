@@ -11,9 +11,8 @@ template <class Context>
 class LastNWindowCollectorOp : public Operator<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
-  template <class... Args>
-  explicit LastNWindowCollectorOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...),
+  LastNWindowCollectorOp(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<Context>(operator_def, ws),
         numToCollect_(
             OperatorBase::GetSingleArgument<int>("num_to_collect", -1)) {
     CAFFE_ENFORCE_GT(numToCollect_, 0);

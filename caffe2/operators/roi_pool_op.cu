@@ -130,12 +130,12 @@ bool RoIPoolOp<float, CUDAContext>::RunOnDevice() {
   auto* A = is_test_ ? nullptr : Output(1); // argmaxes
 
   // Handle empty rois
-  if (R.numel() == 0) {
+  if (R.size() == 0) {
     Y->Resize(0, X.dim32(1), pooled_height_, pooled_width_);
     // mutable_data calls are needed to allocate the tensors
     Y->template mutable_data<float>();
     if (!is_test_) {
-      A->Resize(Y->sizes());
+      A->Resize(Y->dims());
       A->template mutable_data<int>();
     }
     return true;
@@ -143,9 +143,9 @@ bool RoIPoolOp<float, CUDAContext>::RunOnDevice() {
 
   Y->Resize(R.dim32(0), X.dim32(1), pooled_height_, pooled_width_);
   if (!is_test_) {
-    A->Resize(Y->sizes());
+    A->Resize(Y->dims());
   }
-  int output_size = Y->numel();
+  int output_size = Y->size();
   int* argmax_data = is_test_ ? nullptr : A->template mutable_data<int>();
   ROIPoolForward<float>
       <<<CAFFE_GET_BLOCKS(output_size),
@@ -173,20 +173,20 @@ bool RoIPoolGradientOp<float, CUDAContext>::RunOnDevice() {
   auto& A = Input(2); // argmaxes
   auto& dY = Input(3); // Gradient of net w.r.t. output of "forward" op
   // (aka "gradOutput")
+  auto* dX = Output(0); // Gradient of net w.r.t. input to "forward" op
+  // (aka "gradInput")
 
-  auto* dX = Output(
-      0, X.sizes(), at::dtype<float>()); // Gradient of net w.r.t. input to
-                                         // "forward" op (aka "gradInput")
+  dX->ResizeLike(X);
   // Must zero-out dX before accumulating gradients
   math::Set<float, CUDAContext>(
-      dX->numel(), 0.f, dX->template mutable_data<float>(), &context_);
-  if (dY.numel() > 0) { // Handle possibly empty gradient if there were no rois
+      dX->size(), 0.f, dX->template mutable_data<float>(), &context_);
+  if (dY.size() > 0) { // Handle possibly empty gradient if there were no rois
     ROIPoolBackward<float>
-        <<<CAFFE_GET_BLOCKS(dY.numel()),
+        <<<CAFFE_GET_BLOCKS(dY.size()),
            CAFFE_CUDA_NUM_THREADS,
            0,
            context_.cuda_stream()>>>(
-            dY.numel(),
+            dY.size(),
             dY.data<float>(),
             A.data<int>(),
             R.dim32(0),

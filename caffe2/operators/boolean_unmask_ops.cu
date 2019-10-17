@@ -52,7 +52,7 @@ class BooleanUnmaskOp<CUDAContext> final : public Operator<CUDAContext> {
       : Operator<CUDAContext>(def, ws) {}
 
   bool RunOnDevice() override {
-    int maskSize = Input(0).numel();
+    int maskSize = Input(0).size();
     int numMasks = InputSize() / 2;
     const auto& meta = Input(1).meta();
 
@@ -60,30 +60,28 @@ class BooleanUnmaskOp<CUDAContext> final : public Operator<CUDAContext> {
     out->Resize(maskSize);
     auto* dest = (char*)out->raw_mutable_data(meta);
 
-    ReinitializeTensor(&hostMasks_, {numMasks}, at::dtype<bool*>().device(CPU));
+    hostMasks_.Resize(numMasks);
     auto* hostMasksData = hostMasks_.mutable_data<bool*>();
-    ReinitializeTensor(
-        &hostValues_, {numMasks}, at::dtype<char*>().device(CPU));
+    hostValues_.Resize(numMasks);
     auto* hostValuesData = hostValues_.mutable_data<char*>();
-    ReinitializeTensor(
-        &hostValueSizes_, {numMasks}, at::dtype<int>().device(CPU));
+    hostValueSizes_.Resize(numMasks);
     auto* hostValueSizesData = hostValueSizes_.mutable_data<int>();
     for (int i = 0; i < numMasks; ++i) {
       auto& mask = Input(i * 2);
-      CAFFE_ENFORCE_EQ(mask.dim(), 1);
-      CAFFE_ENFORCE_EQ(mask.numel(), maskSize);
+      CAFFE_ENFORCE_EQ(mask.ndim(), 1);
+      CAFFE_ENFORCE_EQ(mask.size(), maskSize);
       hostMasksData[i] = const_cast<bool*>(mask.data<bool>());
 
       const auto& value = Input(i * 2 + 1);
-      CAFFE_ENFORCE_EQ(value.dim(), 1);
+      CAFFE_ENFORCE_EQ(value.ndim(), 1);
       hostValuesData[i] = (char*)value.raw_data();
-      hostValueSizesData[i] = value.numel();
+      hostValueSizesData[i] = value.size();
     }
     masks_.CopyFrom(hostMasks_);
     values_.CopyFrom(hostValues_);
     valueSizes_.CopyFrom(hostValueSizes_);
 
-    ReinitializeTensor(&indices_, {maskSize}, at::dtype<int>().device(CUDA));
+    indices_.Resize(maskSize);
     auto* indicesData = indices_.mutable_data<int>();
 
     ComputeIndicesKernel<<<
@@ -111,14 +109,14 @@ class BooleanUnmaskOp<CUDAContext> final : public Operator<CUDAContext> {
   }
 
  private:
-  Tensor indices_;
+  Tensor indices_{CUDA};
   Tensor masks_{CUDA};
   Tensor values_{CUDA};
   Tensor valueSizes_{CUDA};
 
-  Tensor hostMasks_;
-  Tensor hostValues_;
-  Tensor hostValueSizes_;
+  Tensor hostMasks_{CPU};
+  Tensor hostValues_{CPU};
+  Tensor hostValueSizes_{CPU};
 };
 
 REGISTER_CUDA_OPERATOR(BooleanUnmask, BooleanUnmaskOp<CUDAContext>);

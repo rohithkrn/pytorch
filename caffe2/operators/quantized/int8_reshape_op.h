@@ -13,9 +13,8 @@ namespace int8 {
 
 class Int8ReshapeOp final : public ReshapeOp<uint8_t, CPUContext> {
  public:
-  template <class... Args>
-  explicit Int8ReshapeOp(Args&&... args)
-      : ReshapeOp(std::forward<Args>(args)...) {}
+  Int8ReshapeOp(const OperatorDef& operator_def, Workspace* ws)
+      : ReshapeOp(operator_def, ws) {}
 
   bool RunOnDevice() override {
     if (InputSize() == 2) {

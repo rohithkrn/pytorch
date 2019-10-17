@@ -35,8 +35,7 @@ class TestSparseToDenseMask(TestCase):
             'SparseToDenseMask',
             ['indices', 'values', 'default', 'lengths'],
             ['output'],
-            mask=[999999999, 2],
-            max_skipped_indices=3)
+            mask=[999999999, 2])
         workspace.FeedBlob(
             'indices',
             np.array([2000000000000, 999999999, 2, 3, 4, 5], dtype=np.int32))
@@ -49,13 +48,11 @@ class TestSparseToDenseMask(TestCase):
             workspace.RunOperatorOnce(op)
         except RuntimeError:
             self.fail("Exception raised with only one negative index")
-
-        # 3 invalid inputs should throw.
         workspace.FeedBlob(
             'indices',
-            np.array([-1, 1, 2, 3, 4, 5], dtype=np.int32))
+            np.array([2000000000000, 999999999, -2, -3, -4, -5], dtype=np.int32))
         with self.assertRaises(RuntimeError):
-            workspace.RunOperatorMultiple(op, 3)
+            workspace.RunOperatorOnce(op)
 
     def test_sparse_to_dense_mask_subtensor(self):
         op = core.CreateOperator(

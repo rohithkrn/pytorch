@@ -1,10 +1,12 @@
+#ifdef USE_CUDA
+
 #include <torch/csrc/autograd/functions/comm.h>
 
 #include <torch/csrc/autograd/function.h>
 #include <torch/csrc/autograd/functions/utils.h>
 #include <torch/csrc/autograd/variable.h>
 #include <torch/csrc/cuda/comm.h>
-#include <ATen/core/functional.h>
+#include <torch/csrc/utils/functional.h>
 
 #include <ATen/ATen.h>
 #include <ATen/cuda/CUDAContext.h>
@@ -28,13 +30,12 @@ Scatter::Scatter(
       streams_(streams),
       unsqueeze_scalars_(unsqueeze_scalars) {}
 
-Scatter::~Scatter() {}
-
 variable_list Scatter::apply(variable_list&& inputs) {
+#ifdef USE_CUDA
   AT_ASSERT(inputs.size() == 1);
   auto& input = inputs.front();
 
-  std::shared_ptr<Node> grad_fn;
+  std::shared_ptr<Function> grad_fn;
   if (compute_requires_grad(input)) {
     grad_fn =
         std::make_shared<Gather>(/*destination_device=*/input.device(), dim_);
@@ -59,22 +60,22 @@ variable_list Scatter::apply(variable_list&& inputs) {
     }
   }
 
-  if (grad_fn) {
-    set_history(variables, grad_fn);
-  }
+  set_history(variables, grad_fn);
 
   return variables;
+#else
+  AT_ERROR("Scatter is only supported in CUDA environments");
+#endif
 }
 
 Gather::Gather(const at::Device& destination_device, int64_t dim)
     : destination_device_(destination_device), dim_(dim) {}
 
-Gather::~Gather() {}
-
 variable_list Gather::apply(variable_list&& inputs) {
+#ifdef USE_CUDA
   bool all_are_zero_dim = true;
   for (const auto& input : inputs) {
-    TORCH_CHECK(
+    AT_CHECK(
         input.is_cuda(),
         "All inputs to Gather must be CUDA tensors, got ",
         input.type());
@@ -101,7 +102,7 @@ variable_list Gather::apply(variable_list&& inputs) {
     }
   }
 
-  std::shared_ptr<Node> grad_fn;
+  std::shared_ptr<Function> grad_fn;
   if (compute_requires_grad(inputs)) {
     std::vector<at::Device> source_devices;
     std::vector<int64_t> input_sizes;
@@ -122,11 +123,14 @@ variable_list Gather::apply(variable_list&& inputs) {
   const auto destination_index =
       destination_device_.is_cpu() ? -1 : destination_device_.index();
   auto variable = torch::cuda::gather(tensors, dim_, destination_index);
-  if (grad_fn) {
-    set_history(variable, grad_fn);
-  }
+  set_history(variable, grad_fn);
   return {variable};
+#else
+  AT_ERROR("Gather is only supported in CUDA environments");
+#endif
 }
 
 } // namespace autograd
 } // namespace torch
+
+#endif

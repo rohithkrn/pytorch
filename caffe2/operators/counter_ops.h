@@ -45,9 +45,8 @@ template <typename T, class Context>
 class CreateCounterOp final : public Operator<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
-  template <class... Args>
-  explicit CreateCounterOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...),
+  CreateCounterOp(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<Context>(operator_def, ws),
         init_count_(this->template GetSingleArgument<T>("init_count", 0)) {
     CAFFE_ENFORCE_LE(0, init_count_, "negative init_count is not permitted.");
   }
@@ -66,9 +65,8 @@ template <typename T, class Context>
 class ResetCounterOp final : public Operator<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
-  template <class... Args>
-  explicit ResetCounterOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...),
+  ResetCounterOp(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<Context>(operator_def, ws),
         init_count_(this->template GetSingleArgument<T>("init_count", 0)) {
     CAFFE_ENFORCE_LE(0, init_count_, "negative init_count is not permitted.");
   }
@@ -93,9 +91,8 @@ template <typename T, class Context>
 class CountDownOp final : public Operator<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
-  template <class... Args>
-  explicit CountDownOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...) {}
+  CountDownOp(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<Context>(operator_def, ws) {}
 
   bool RunOnDevice() override {
     auto& counterPtr = this->template Input<std::unique_ptr<Counter<T>>>(0);
@@ -111,9 +108,8 @@ template <typename T, class Context>
 class CheckCounterDoneOp final : public Operator<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
-  template <class... Args>
-  explicit CheckCounterDoneOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...) {}
+  CheckCounterDoneOp(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<Context>(operator_def, ws) {}
 
   bool RunOnDevice() override {
     auto& counterPtr = this->template Input<std::unique_ptr<Counter<T>>>(0);
@@ -129,9 +125,8 @@ template <typename T, class Context>
 class CountUpOp final : public Operator<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
-  template <class... Args>
-  explicit CountUpOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...) {}
+  CountUpOp(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<Context>(operator_def, ws) {}
 
   bool RunOnDevice() override {
     auto& counterPtr = this->template Input<std::unique_ptr<Counter<T>>>(0);
@@ -147,9 +142,8 @@ template <typename T, class Context>
 class RetrieveCountOp final : public Operator<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
-  template <class... Args>
-  explicit RetrieveCountOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...) {}
+  RetrieveCountOp(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<Context>(operator_def, ws) {}
 
   bool RunOnDevice() override {
     auto& counterPtr = this->template Input<std::unique_ptr<Counter<T>>>(0);

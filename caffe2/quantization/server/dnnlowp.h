@@ -93,8 +93,7 @@ class QuantizationFactory {
       const Histogram& hist,
       QuantizationKind kind,
       int precision,
-      bool preserve_sparsity,
-      bool is_weight = false) const;
+      bool preserve_sparsity) const;
 
   TensorQuantizationParams ChooseQuantizationParams(
       const Histogram& hist,
@@ -163,13 +162,7 @@ class QuantizationFactory {
       bool force_scale_power_of_two = false,
       // restrict scaling to a power of two
       QuantizationKind activation_kind = MIN_MAX_QUANTIZATION,
-      QuantizationKind weight_kind = MIN_MAX_QUANTIZATION,
-      float weight_p99_threshold = 0.99,
-      // P99 percentage to select out from the full histogram for weights
-
-      float activation_p99_threshold = 0.99
-      // P99 percentage to select out from the full histogram for activations
-  );
+      QuantizationKind weight_kind = MIN_MAX_QUANTIZATION);
 
  private:
   int activation_precision_;
@@ -180,16 +173,11 @@ class QuantizationFactory {
   bool preserve_weight_sparsity_;
   bool force_scale_power_of_two_;
   QuantizationKind activation_kind_, weight_kind_;
-  float weight_p99_threshold_;
-  float activation_p99_threshold_;
 }; // class QuantizationFactory
 
 /**
  * Parse a string to QuantizationKind
  */
 QuantizationFactory::QuantizationKind StringToKind(const std::string& s);
-
-std::vector<float>
-adjust_hist_to_include_zero(const Histogram& hist, float* min, float* max);
 
 } // namespace dnnlowp

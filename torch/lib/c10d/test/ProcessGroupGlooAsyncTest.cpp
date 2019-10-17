@@ -1,5 +1,7 @@
-#include <ATen/cuda/CUDAMultiStreamGuard.h>
+#include <gloo/transport/tcp/device.h>
+
 #include <c10/cuda/CUDAGuard.h>
+#include <ATen/cuda/CUDAMultiStreamGuard.h>
 
 #include <c10d/FileStore.hpp>
 #include <c10d/ProcessGroupGloo.hpp>
@@ -49,8 +51,8 @@ class AsyncTest {
     // Use tiny timeout to make this test run fast
     ::c10d::ProcessGroupGloo::Options options;
     options.timeout = std::chrono::milliseconds(50);
-    options.devices.push_back(
-        ::c10d::ProcessGroupGloo::createDeviceForHostname("127.0.0.1"));
+    ::gloo::transport::tcp::attr attr;
+    options.devices.push_back(::gloo::transport::tcp::CreateDevice(attr));
 
     pg_ = std::unique_ptr<::c10d::ProcessGroupGloo>(
         new ::c10d::ProcessGroupGloo(store, rank, size, options));
@@ -196,7 +198,7 @@ void runAsyncAllreduceTest(
     auto tensors = tests[i].getTensors();
     for (size_t j = 0; j < tensors.size(); j++) {
       auto& tensor = tensors[j];
-      auto data = tensor.data_ptr<float>();
+      auto data = tensor.data<float>();
       for (auto k = 0; k < tensor.numel(); k++) {
         if (data[k] != expected) {
           throw std::runtime_error("BOOM!");
@@ -231,7 +233,7 @@ void runAsyncBroadcastTest(
         auto tensors = tests[i].getTensors();
         for (size_t j = 0; j < tensors.size(); j++) {
           auto& tensor = tensors[j];
-          auto data = tensor.data_ptr<float>();
+          auto data = tensor.data<float>();
           for (auto k = 0; k < tensor.numel(); k++) {
             if (data[k] != expected) {
               throw std::runtime_error("BOOM!");

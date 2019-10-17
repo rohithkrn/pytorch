@@ -3,15 +3,7 @@
 #include "caffe2/core/context_gpu.h"
 #include "caffe2/operators/rmac_regions_op.h"
 
-#ifdef __HIP_PLATFORM_HCC__
-#include <cfloat>
-#endif
-
-#ifdef __HIP_PLATFORM_HCC__
-namespace rocprim {
-#else
 namespace cub {
-#endif
 
 template <typename KeyT, typename ValueT>
 inline __host__ __device__ bool operator<(
@@ -169,9 +161,9 @@ __global__ void RMACRegionsKernel(
 template <>
 bool RMACRegionsOp<CUDAContext>::RunOnDevice() {
   const auto& X = Input(0); // Input tensor
-   // RoIs
+  auto* output = Output(0); // RoIs
 
-  if (X.numel() == 0) {
+  if (X.size() == 0) {
     return true;
   }
 
@@ -182,7 +174,7 @@ bool RMACRegionsOp<CUDAContext>::RunOnDevice() {
   // Compute number of regions
   int min_step = 1;
   int max_step = 6;
-  ReinitializeTensor(&num_rois_, {3}, at::dtype<int>().device(CUDA)); // num_rois, Wd, Hd
+  num_rois_.Resize(3); // num_rois, Wd, Hd
   NumRMACRegionsKernel<<<
       1,
       CAFFE_CUDA_NUM_THREADS,
@@ -202,7 +194,7 @@ bool RMACRegionsOp<CUDAContext>::RunOnDevice() {
   int num_rois = 0;
   context_.CopyBytesToCPU(sizeof(int), num_rois_.data<int>(), &num_rois);
   int N = batch_size * num_rois;
-  auto* output = Output(0, {N, 5}, at::dtype<float>()); // [batch_id x1 y1 x2 y2]
+  output->Resize(N, 5); // [batch_id x1 y1 x2 y2]
 
   // Compute region coordinates
   RMACRegionsKernel<<<

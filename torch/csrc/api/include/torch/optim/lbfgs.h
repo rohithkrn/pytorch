@@ -27,11 +27,11 @@ struct TORCH_API LBFGSOptions {
 class TORCH_API LBFGS : public LossClosureOptimizer {
  public:
   template <typename ParameterContainer>
-  explicit LBFGS(ParameterContainer&& parameters, const LBFGSOptions& options_)
+  explicit LBFGS(ParameterContainer&& parameters, const LBFGSOptions& options)
       : LossClosureOptimizer(std::forward<ParameterContainer>(parameters)),
-        options(options_),
-        ro(options_.history_size()),
-        al(options_.history_size()) {}
+        options(options),
+        ro(options.history_size_),
+        al(options.history_size_) {}
 
   torch::Tensor step(LossClosure closure) override;
 
@@ -65,8 +65,8 @@ class TORCH_API LBFGS : public LossClosureOptimizer {
     archive("H_diag", self.H_diag, /*is_buffer=*/true);
     archive("prev_flat_grad", self.prev_flat_grad, /*is_buffer=*/true);
     archive("prev_loss", self.prev_loss, /*is_buffer=*/true);
-    optim::serialize(archive, "old_dirs", self.old_dirs);
-    optim::serialize(archive, "old_stps", self.old_stps);
+    detail::serialize(archive, "old_dirs", self.old_dirs);
+    detail::serialize(archive, "old_stps", self.old_stps);
   }
 };
 } // namespace optim

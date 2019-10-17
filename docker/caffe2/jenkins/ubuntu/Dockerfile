@@ -31,7 +31,6 @@ RUN rm install_mkl.sh
 
 # (optional) Install Android NDK
 ARG ANDROID
-ARG ANDROID_NDK
 ADD ./install_android.sh install_android.sh
 RUN if [ -n "${ANDROID}" ]; then bash ./install_android.sh; fi
 RUN rm install_android.sh

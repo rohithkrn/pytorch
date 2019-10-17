@@ -1,4 +1,5 @@
-def if_one(a: Tensor,
+def graph(self,
+    a: Tensor,
     b: Tensor) -> Tensor:
   if bool(torch.lt(a, b)):
     c = a

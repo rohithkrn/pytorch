@@ -1,5 +1,4 @@
 #include <torch/csrc/jit/passes/utils/check_alias_annotation.h>
-#include <torch/csrc/jit/operator.h>
 
 namespace torch {
 namespace jit {
@@ -16,8 +15,8 @@ IValue deepCopy(const IValue& self) {
     return IValue(self.toTensor().clone());
   }
   if (self.isTensorList()) {
-    c10::List<at::Tensor> newList;
-    for (const at::Tensor& oldTensor : self.toTensorListRef()) {
+    std::vector<at::Tensor> newList;
+    for (const auto& oldTensor : self.toTensorListRef()) {
       newList.push_back(oldTensor.clone());
     }
     return newList;
@@ -25,10 +24,8 @@ IValue deepCopy(const IValue& self) {
 
   // Lists of ivalues should recursively deep copy their contents
   if (self.isGenericList()) {
-    auto source = std::move(self).toGenericList();
-    auto newList = c10::impl::GenericList(source.elementType());
-    newList.reserve(source.size());
-    for (const IValue& value : source) {
+    std::vector<IValue> newList;
+    for (const auto& value : self.toGenericListRef()) {
       newList.push_back(deepCopy(value));
     }
     return newList;
@@ -36,11 +33,11 @@ IValue deepCopy(const IValue& self) {
 
   // Regular lists can copy assign
   if (self.isIntList()) {
-    return IValue(self.toIntList().copy());
+    return IValue(self.toIntListRef());
   } else if (self.isDoubleList()) {
-    return IValue(self.toDoubleList().copy());
+    return IValue(self.toDoubleListRef());
   } else if (self.isBoolList()) {
-    return IValue(self.toBoolList().copy());
+    return IValue(self.toBoolListRef());
   } else if (self.isString()) {
     return IValue(self.toStringRef());
   }
@@ -52,7 +49,6 @@ IValue deepCopy(const IValue& self) {
 
 Stack deepCopy(const Stack& stack) {
   Stack ret;
-  ret.reserve(stack.size());
   for (const auto& v : stack) {
     ret.push_back(deepCopy(v));
   }
@@ -67,7 +63,7 @@ bool deepEquals(const IValue& lhs, const IValue& rhs) {
   } else if (lhs.isNone() && rhs.isNone()) {
     return true;
   } else if (lhs.isIntList() && rhs.isIntList()) {
-    return lhs.toIntListRef().equals(rhs.toIntListRef());
+    return lhs.toIntList()->elements() == rhs.toIntList()->elements();
   } else if (lhs.isTensor() && rhs.isTensor()) {
     return lhs.toTensor().equal(rhs.toTensor());
   }
@@ -76,7 +72,9 @@ bool deepEquals(const IValue& lhs, const IValue& rhs) {
 }
 
 struct AliasAndIValue {
-  AliasAndIValue(c10::optional<at::AliasInfo> aliasInfo, IValue iValue)
+  AliasAndIValue(
+      c10::optional<at::AliasInfo> aliasInfo,
+      IValue iValue)
       : aliasInfo(std::move(aliasInfo)), iValue(std::move(iValue)) {}
 
   const c10::optional<at::AliasInfo> aliasInfo;
@@ -92,7 +90,7 @@ void checkInputPreconditions(const Stack& inputs) {
       }
       const auto& lhs = inputs.at(i);
       const auto& rhs = inputs.at(j);
-      AT_ASSERT(!lhs.isAliasOf(rhs));
+      JIT_ASSERT(!lhs.isAliasOf(rhs));
     }
   }
 }
@@ -107,15 +105,8 @@ void checkAliases(
       if (output.iValue.isAliasOf(input.iValue)) {
         const auto inputSet = input.aliasInfo;
         const auto outputSet = output.aliasInfo;
-        AT_ASSERT(inputSet && outputSet);
-        bool found = false;
-        for (const auto& set : inputSet->beforeSets()) {
-          if (outputSet->beforeSets().count(set)) {
-            found = true;
-            break;
-          }
-        }
-        AT_ASSERT(found);
+        JIT_ASSERT(inputSet && outputSet);
+        JIT_ASSERT(inputSet->isSubsetOf(*outputSet));
       }
     }
   }
@@ -126,12 +117,12 @@ void checkAliases(
 void checkWrites(
     const std::vector<AliasAndIValue>& inputs,
     const std::vector<IValue>& deepCopiedInputs) {
-  AT_ASSERT(inputs.size() == deepCopiedInputs.size());
+  JIT_ASSERT(inputs.size() == deepCopiedInputs.size());
   for (size_t i = 0; i < inputs.size(); i++) {
     const auto& input = inputs[i];
     const auto& deepCopiedInput = deepCopiedInputs[i];
     if (!input.aliasInfo || !input.aliasInfo->isWrite()) {
-      AT_ASSERT(deepEquals(input.iValue, deepCopiedInput));
+      JIT_ASSERT(deepEquals(input.iValue, deepCopiedInput));
     }
   }
 }
@@ -145,7 +136,7 @@ const Node* findNodeForOp(
       return node;
     }
   }
-  AT_ASSERT(false);
+  JIT_ASSERT(false);
 }
 
 // Handle a few special cases where we need to propagate constants
@@ -167,17 +158,17 @@ c10::optional<IValue> toIValueProp(const Value* v) {
     auto listType = v->node()->output()->type();
     auto containedType = listType->containedTypes().at(0);
     if (containedType == IntType::get()) {
-      return c10::impl::toList(fmap(genericList, [](const IValue& v) { return v.toInt(); }));
+      return fmap(genericList, [](const IValue& v) { return v.toInt(); });
     } else if (containedType == FloatType::get()) {
-      return c10::impl::toList(fmap(genericList, [](const IValue& v) { return v.toDouble(); }));
-    } else if (containedType->isSubtypeOf(TensorType::get())) {
-      return c10::impl::toList(fmap(genericList, [](const IValue& v) { return v.toTensor(); }));
+      return fmap(genericList, [](const IValue& v) { return v.toDouble(); });
+    } else if (containedType->isSubtypeOf(DynamicType::get())) {
+      return fmap(genericList, [](const IValue& v) { return v.toTensor(); });
     } else {
       return c10::nullopt;
     }
   }
 
-  if (v->node()->kind() == aten::Float) {
+  if (v->node()->kind() == prim::Float) {
     auto op = getOperation(v->node());
     if (auto input = toIValue(v->node()->input())) {
       auto op = getOperation(v->node());
@@ -216,7 +207,7 @@ void checkAliasAnnotation(
       if (inputValue) {
         push(stack, *inputValue);
       } else {
-        AT_ASSERT(input->type()->kind() == TypeKind::OptionalType);
+        JIT_ASSERT(input->type()->kind() == TypeKind::OptionalType);
         push(stack, IValue());
       }
     }

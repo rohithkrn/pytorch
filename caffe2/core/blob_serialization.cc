@@ -31,7 +31,7 @@ namespace caffe2 {
 class StringSerializer : public BlobSerializerBase {
  public:
   StringSerializer() {}
-  ~StringSerializer() override {}
+  ~StringSerializer() {}
   /**
    * Serializes a Blob. Note that this blob has to contain Tensor,
    * otherwise this function produces a fatal error.
@@ -138,6 +138,7 @@ void TensorSerializer::SerializeWithChunkSize(
   };
 
 #ifndef __ANDROID__
+  std::vector<std::future<void>> futures;
   // Poorman's IOBound ThreadPool
   SimpleQueue<size_t> chunkQueue;
   auto task = [&]() {
@@ -146,9 +147,7 @@ void TensorSerializer::SerializeWithChunkSize(
       processChunk(chunkStart);
     }
   };
-  std::vector<std::future<void>> futures;
   if (tensor.numel() > chunk_size) {
-    futures.reserve(FLAGS_caffe2_max_tensor_serializer_threads);
     for (int i = 0; i < FLAGS_caffe2_max_tensor_serializer_threads; ++i) {
       futures.emplace_back(std::async(std::launch::async, task));
     }
@@ -223,7 +222,7 @@ void TensorSerializer::Serialize(
   const TensorProto::DataType data_type = TypeMetaToDataType(input.dtype());
   proto.set_data_type(data_type);
   StoreDeviceDetail(input, &proto);
-  // TODO: use CUDAGuard here instead of context and employ explicit sync
+  // TODO: use DeviceGuard here instead of context and employ explicit sync
   // copy
   auto uniq_ptr = CreateContext(input.GetDevice());
   // A lot of copypaste is error prone. Should we create a macro for this?
@@ -392,7 +391,6 @@ void DeserializeBlob(const BlobProto& blob_proto, Blob* result) {
 // Get dimensions from Tensor proto
 static std::vector<int64_t> DimsFromTensorProto(const TensorProto& proto) {
   std::vector<int64_t> dims;
-  dims.reserve(proto.dims().size());
   for (const int64_t d : proto.dims()) {
     dims.push_back(d);
   }
@@ -439,7 +437,7 @@ static std::unique_ptr<BaseContext> ContextFromProto(
 
 Tensor EmptyTensorFromProto(const TensorProto& tensor_proto) {
   auto context = ContextFromProto(tensor_proto);
-  context->SwitchToDevice();
+  context->SwitchToDevice(0);
   if (NumelFromTensorProto(tensor_proto) == 0 &&
       tensor_proto.data_type() == TensorProto_DataType_UNDEFINED) {
     // TODO: remove when serialization of dtype uninitialized tensor is removed
@@ -457,7 +455,7 @@ Tensor EmptyTensorFromProto(const TensorProto& tensor_proto) {
 void TensorDeserializer::Deserialize(const BlobProto& blob_proto, Blob* blob) {
   auto tensor_proto = blob_proto.tensor();
   auto context = ContextFromProto(tensor_proto);
-  context->SwitchToDevice();
+  context->SwitchToDevice(0);
   if (NumelFromTensorProto(tensor_proto) == 0 &&
       tensor_proto.data_type() == TensorProto_DataType_UNDEFINED) {
     // TODO: remove after empty Tensor serialization is forbidden
@@ -488,7 +486,7 @@ void TensorDeserializer::DeserializeToTensor(
   auto uniq_ptr = ContextFromProto(tensor_proto);
   // since CopyFromProtoAsIs accepts BaseContext*
   auto context = uniq_ptr.get();
-  context->SwitchToDevice();
+  context->SwitchToDevice(0);
 
   int64_t chunkBegin = 0;
   auto chunkEnd = tensor->numel();

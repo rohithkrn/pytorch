@@ -4,20 +4,19 @@
 #include <THC/THCReduceApplyUtils.cuh>
 #include <THC/THCTensorTypeUtils.cuh>
 #include <THC/THCNumerics.cuh>
-#include <c10/macros/Macros.h>
 
 // Collection of kernel sort routines
-template <typename T, bool handleNaN = false>
+template <typename T>
 struct LTComp {
   __device__ inline bool operator()(const T& a, const T& b) const {
-    return (handleNaN && THCNumerics<T>::isnan(b) && !THCNumerics<T>::isnan(a)) || THCNumerics<T>::lt(a, b);
+    return THCNumerics<T>::lt(a, b);
   }
 };
 
-template <typename T, bool handleNaN = false>
+template <typename T>
 struct GTComp {
   __device__ inline bool operator()(const T& a, const T& b) const {
-    return (handleNaN && THCNumerics<T>::isnan(a) && !THCNumerics<T>::isnan(b)) || THCNumerics<T>::gt(a, b);
+    return THCNumerics<T>::gt(a, b);
   }
 };
 
@@ -60,15 +59,11 @@ __device__ inline void bitonicSort(K keys[Power2SortSize],
                                    V values[Power2SortSize],
                                    bool valid[Power2SortSize],
                                    const Comparator& comp) {
-#ifndef __HIP_PLATFORM_HCC__
 #pragma unroll
-#endif
   for (unsigned int size = 2; size < Power2SortSize; size *= 2) {
     bool flag = ((threadIdx.x & (size / 2)) != 0);
 
-#ifndef __HIP_PLATFORM_HCC__
 #pragma unroll
-#endif
     for (unsigned int stride = size / 2; stride > 0; stride /= 2) {
 
       __syncthreads();
@@ -81,9 +76,7 @@ __device__ inline void bitonicSort(K keys[Power2SortSize],
     }
   }
 
-#ifndef __HIP_PLATFORM_HCC__
 #pragma unroll
-#endif
   for (unsigned int stride = Power2SortSize / 2; stride > 0; stride /= 2) {
 
     __syncthreads();
@@ -104,15 +97,11 @@ template <typename Comparator, typename K,
 __device__ inline void bitonicSortKeys(K keys[Power2SortSize],
                                    bool valid[Power2SortSize],
                                    const Comparator& comp) {
-#ifndef __HIP_PLATFORM_HCC__
 #pragma unroll
-#endif
   for (unsigned int size = 2; size < Power2SortSize; size *= 2) {
     bool flag = ((threadIdx.x & (size / 2)) != 0);
 
-#ifndef __HIP_PLATFORM_HCC__
 #pragma unroll
-#endif
     for (unsigned int stride = size / 2; stride > 0; stride /= 2) {
 
       __syncthreads();
@@ -125,9 +114,7 @@ __device__ inline void bitonicSortKeys(K keys[Power2SortSize],
     }
   }
 
-#ifndef __HIP_PLATFORM_HCC__
 #pragma unroll
-#endif
   for (unsigned int stride = Power2SortSize / 2; stride > 0; stride /= 2) {
     __syncthreads();
 
@@ -147,7 +134,7 @@ __device__ inline void bitonicSortKeys(K keys[Power2SortSize],
 template <typename K, typename V,
           int KeyDims, int ValueDims,
           typename Comparator, typename IndexType, int Power2SortSize>
-C10_LAUNCH_BOUNDS_1(1024)
+__launch_bounds__(1024)
 __global__ void
 bitonicSortKVInPlace(TensorInfo<K, IndexType> keys,
                      IndexType keySlices,

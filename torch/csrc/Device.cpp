@@ -67,7 +67,7 @@ PyObject *THPDevice_pynew(PyTypeObject *type, PyObject *args, PyObject *kwargs)
       device_index = r.toInt64(1);
       // -1 is allowed in ATen/C++, to mean the default device, but not in
       // Python.
-      TORCH_CHECK(device_index >= 0, "Device index must not be negative");
+      AT_CHECK(device_index >= 0, "Device index must not be negative");
     }
     at::Device device(as_device.type(), device_index);
     return THPDevice_New(device);
@@ -76,7 +76,7 @@ PyObject *THPDevice_pynew(PyTypeObject *type, PyObject *args, PyObject *kwargs)
   END_HANDLE_TH_ERRORS
 }
 
-PyObject *THPDevice_type(THPDevice *self, PyObject *noargs)
+PyObject *THPDevice_type(THPDevice *self)
 {
   HANDLE_TH_ERRORS
   std::ostringstream oss;
@@ -86,7 +86,7 @@ PyObject *THPDevice_type(THPDevice *self, PyObject *noargs)
   END_HANDLE_TH_ERRORS
 }
 
-PyObject *THPDevice_index(THPDevice *self, PyObject *noargs)
+PyObject *THPDevice_index(THPDevice *self)
 {
   HANDLE_TH_ERRORS
   if (self->device.has_index()) {
@@ -138,7 +138,7 @@ PyObject *THPDevice_rc(PyObject *a, PyObject *b, int op) {
   END_HANDLE_TH_ERRORS
 }
 
-PyObject *THPDevice_reduce(THPDevice *self, PyObject *noargs)
+PyObject *THPDevice_reduce(THPDevice *self)
 {
   HANDLE_TH_ERRORS
   auto ret = THPObjectPtr{PyTuple_New(2)};

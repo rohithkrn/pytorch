@@ -9,7 +9,6 @@
 #include <algorithm>
 #include <functional>
 #include <map>
-#include <ostream>
 #include <string>
 #include <typeinfo>
 
@@ -278,11 +277,9 @@ void Module::save(serialize::OutputArchive& archive) const {
     archive.write(buffer.key(), buffer.value(), /*is_buffer=*/true);
   }
   for (const auto& child : children_) {
-    if (child.value()->is_serializable()) {
-      serialize::OutputArchive child_archive(archive.compilation_unit());
-      child.value()->save(child_archive);
-      archive.write(child.key(), child_archive);
-    }
+    serialize::OutputArchive child_archive;
+    child.value()->save(child_archive);
+    archive.write(child.key(), child_archive);
   }
 }
 
@@ -294,24 +291,18 @@ void Module::load(serialize::InputArchive& archive) {
     archive.read(buffer.key(), buffer.value(), /*is_buffer=*/true);
   }
   for (const auto& child : children_) {
-    if (child.value()->is_serializable()) {
-      serialize::InputArchive child_archive;
-      archive.read(child.key(), child_archive);
-      child.value()->load(child_archive);
-    }
+    serialize::InputArchive child_archive;
+    archive.read(child.key(), child_archive);
+    child.value()->load(child_archive);
   }
-}
-
-bool Module::is_serializable() const {
-  return true;
 }
 
 Tensor& Module::register_parameter(
     std::string name,
     Tensor tensor,
     bool requires_grad) {
-  TORCH_CHECK(!name.empty(), "Parameter name must not be empty");
-  TORCH_CHECK(
+  AT_CHECK(!name.empty(), "Parameter name must not be empty");
+  AT_CHECK(
       name.find('.') == std::string::npos,
       "Parameter name must not contain a dot (got '",
       name,
@@ -321,42 +312,13 @@ Tensor& Module::register_parameter(
 }
 
 Tensor& Module::register_buffer(std::string name, Tensor tensor) {
-  TORCH_CHECK(!name.empty(), "Buffer name must not be empty");
-  TORCH_CHECK(
+  AT_CHECK(!name.empty(), "Buffer name must not be empty");
+  AT_CHECK(
       name.find('.') == std::string::npos,
       "Buffer name must not contain a dot (got '",
       name,
       "')");
   return buffers_.insert(std::move(name), std::move(tensor));
-}
-
-void Module::unregister_module(const std::string& name) {
-  TORCH_CHECK(
-      children_.contains(name),
-      "No Module with name `",
-      name,
-      "` is registered");
-  children_.erase(name);
-}
-
-void Module::pretty_print(std::ostream& stream) const {
-  stream << name();
-}
-
-void Module::pretty_print_recursive(
-    std::ostream& stream,
-    const std::string& indentation) const {
-  pretty_print(stream);
-  if (!children_.is_empty()) {
-    stream << "(\n";
-    const std::string next_indentation = indentation + "  ";
-    for (const auto& child : children_) {
-      stream << next_indentation << "(" << child.key() << "): ";
-      child.value()->pretty_print_recursive(stream, next_indentation);
-      stream << '\n';
-    }
-    stream << indentation << ")";
-  }
 }
 
 void Module::clone_(Module& other, const optional<Device>& device) {}
@@ -389,15 +351,10 @@ std::shared_ptr<Module> Module::shared_from_this_checked() const {
   return std::const_pointer_cast<Module>(ptr);
 }
 
-std::ostream& operator<<(std::ostream& stream, const nn::Module& module) {
-  module.pretty_print_recursive(stream, "");
-  return stream;
-}
-
 serialize::OutputArchive& operator<<(
     serialize::OutputArchive& archive,
     const std::shared_ptr<nn::Module>& module) {
-  TORCH_CHECK(module != nullptr, "Cannot serialize empty module");
+  AT_CHECK(module != nullptr, "Cannot serialize empty module");
   module->save(archive);
   return archive;
 }
@@ -405,7 +362,7 @@ serialize::OutputArchive& operator<<(
 serialize::InputArchive& operator>>(
     serialize::InputArchive& archive,
     const std::shared_ptr<nn::Module>& module) {
-  TORCH_CHECK(module != nullptr, "Cannot deserialize empty module");
+  AT_CHECK(module != nullptr, "Cannot deserialize empty module");
   module->load(archive);
   return archive;
 }

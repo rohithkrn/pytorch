@@ -15,9 +15,8 @@ class MomentsOp final : public Operator<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
 
-  template <class... Args>
-  explicit MomentsOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...),
+  MomentsOp(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<Context>(operator_def, ws),
         axes_(this->template GetRepeatedArgument<int>("axes")),
         OP_SINGLE_ARG(bool, "keepdims", keep_dims_, true) {}
 
@@ -37,32 +36,29 @@ class MomentsOp final : public Operator<Context> {
           "Axes ids must be smaller than the dimensions of input.");
     }
     const std::vector<int> X_dims(X.sizes().cbegin(), X.sizes().cend());
-    std::vector<int> Y_dims = X_dims;
-    for (const int axis : axes_) {
-      Y_dims[axis] = 1;
-    }
-    std::vector<std::int64_t> output_dims;
-    output_dims.reserve(ndim);
+    std::vector<int64_t> Y_dims;
+    Y_dims.reserve(ndim);
     std::size_t cur_axis = 0;
     for (int i = 0; i < ndim; ++i) {
       if (cur_axis < axes_.size() && i == axes_[cur_axis]) {
         if (keep_dims_) {
-          output_dims.push_back(1);
+          Y_dims.push_back(1);
         }
         ++cur_axis;
       } else {
-        output_dims.push_back(X_dims[i]);
+        Y_dims.push_back(X_dims[i]);
       }
     }
-    auto* mean = Output(0, output_dims, at::dtype<T>());
-    auto* var = Output(1, output_dims, at::dtype<T>());
+    auto* mean = Output(0, Y_dims, at::dtype<T>());
+    auto* variance = Output(1, Y_dims, at::dtype<T>());
     math::Moments<float, Context>(
         X_dims.size(),
         X_dims.data(),
-        Y_dims.data(),
+        axes_.size(),
+        axes_.data(),
         X.template data<T>(),
         mean->template mutable_data<T>(),
-        var->template mutable_data<T>(),
+        variance->template mutable_data<T>(),
         &context_);
     return true;
   }
@@ -77,9 +73,8 @@ class MomentsGradientOp final : public Operator<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
 
-  template <class... Args>
-  explicit MomentsGradientOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...),
+  MomentsGradientOp(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<Context>(operator_def, ws),
         axes_(this->template GetRepeatedArgument<int>("axes")) {}
 
   bool RunOnDevice() override {

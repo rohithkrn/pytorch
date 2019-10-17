@@ -16,9 +16,8 @@ namespace int8 {
 template <Activation Ac>
 class Int8AveragePoolOp final : public ConvPoolOpBase<CPUContext> {
  public:
-  template <class... Args>
-  explicit Int8AveragePoolOp(Args&&... args)
-      : ConvPoolOpBase<CPUContext>(std::forward<Args>(args)...) {
+  Int8AveragePoolOp(const OperatorDef& operator_def, Workspace* ws)
+      : ConvPoolOpBase<CPUContext>(operator_def, ws) {
     OPERATOR_NEEDS_FEATURE(
         this->order_ == StorageOrder::NHWC, "Int8 only supports NHWC order.");
   }
@@ -63,7 +62,6 @@ class Int8AveragePoolOp final : public ConvPoolOpBase<CPUContext> {
             Y->zero_point, Y->scale,
             activationLimits(Y->scale, Y->zero_point, Ac).first,
             activationLimits(Y->scale, Y->zero_point, Ac).second,
-            0 /* flags */,
             &this->qnnpackGlobalOperator_);
         CAFFE_ENFORCE(
             createStatus == qnnp_status_success,
@@ -104,7 +102,6 @@ class Int8AveragePoolOp final : public ConvPoolOpBase<CPUContext> {
           Y->zero_point, Y->scale,
           activationLimits(Y->scale, Y->zero_point, Ac).first,
           activationLimits(Y->scale, Y->zero_point, Ac).second,
-          0 /* flags */,
           &this->qnnpackOperator_);
         CAFFE_ENFORCE(
             createStatus == qnnp_status_success,

@@ -12,9 +12,8 @@ namespace int8 {
 
 class Int8FlattenOp : public Operator<CPUContext> {
  public:
-  template <class... Args>
-  explicit Int8FlattenOp(Args&&... args)
-      : Operator<CPUContext>(std::forward<Args>(args)...),
+  Int8FlattenOp(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<CPUContext>(operator_def, ws),
         axis_(this->template GetSingleArgument<int>("axis", 1)) {}
 
   bool RunOnDevice() override {

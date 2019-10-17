@@ -2,10 +2,9 @@
 # Module caffe2.python.layers.sparse_to_dense
 from __future__ import absolute_import, division, print_function, unicode_literals
 
-from collections import defaultdict
 import numpy as np
 from caffe2.python import schema
-from caffe2.python.layers.layers import ModelLayer, AccessedFeatures
+from caffe2.python.layers.layers import ModelLayer
 
 
 class FeatureSparseToDense(ModelLayer):
@@ -295,18 +294,3 @@ class FeatureSparseToDense(ModelLayer):
             if feature_specs.feature_type == "FLOAT":
                 metadata[-1][0]["cardinality"] = 1
         return metadata
-
-    def get_accessed_features(self):
-        accessed_features = defaultdict(list)
-
-        # The features that are accessed are just those features that appear in
-        # the input specs
-        for field, feature_specs in self.input_specs:
-            accessed_features[field].append(
-                AccessedFeatures(
-                    feature_specs.feature_type,
-                    set(feature_specs.feature_ids)
-                )
-            )
-
-        return accessed_features

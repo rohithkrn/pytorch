@@ -18,9 +18,8 @@ template <typename T, class Context, class Engine = DefaultEngine>
 class TTLinearOp final : public Operator<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
-  template <class... Args>
-  explicit TTLinearOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...),
+  TTLinearOp(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<Context>(operator_def, ws),
         inp_sizes_(this->template GetRepeatedArgument<int>("inp_sizes")),
         out_sizes_(this->template GetRepeatedArgument<int>("out_sizes")),
         tt_ranks_(this->template GetRepeatedArgument<int>("tt_ranks")),
@@ -139,10 +138,7 @@ class TTLinearOp final : public Operator<Context> {
     // Add bias term
     if (bias_multiplier_.numel() != batch_size) {
       // If the helper bias multiplier is not M, reshape and fill it with one.
-      ReinitializeTensor(
-          &bias_multiplier_,
-          {batch_size},
-          at::dtype<T>().device(Context::GetDeviceType()));
+      bias_multiplier_.Resize(batch_size);
       math::Set<T, Context>(
           batch_size,
           static_cast<T>(1),
@@ -165,7 +161,7 @@ class TTLinearOp final : public Operator<Context> {
   }
 
  protected:
-  Tensor bias_multiplier_;
+  Tensor bias_multiplier_{Context::GetDeviceType()};
   std::vector<int> inp_sizes_;
   std::vector<int> out_sizes_;
   std::vector<int> tt_ranks_;
@@ -177,9 +173,8 @@ template <typename T, class Context, class Engine = DefaultEngine>
 class TTLinearGradientOp : public Operator<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
-  template <class... Args>
-  explicit TTLinearGradientOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...) {}
+  TTLinearGradientOp(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<Context>(operator_def, ws) {}
   ~TTLinearGradientOp() {}
 
   bool RunOnDevice() override {

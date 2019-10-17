@@ -12,16 +12,14 @@ namespace caffe2 {
 template <typename T, class Context>
 class RoIAlignGradientOp final : public Operator<Context> {
  public:
-  template <class... Args>
-  explicit RoIAlignGradientOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...),
+  RoIAlignGradientOp(const OperatorDef& def, Workspace* ws)
+      : Operator<Context>(def, ws),
         spatial_scale_(
             this->template GetSingleArgument<float>("spatial_scale", 1.)),
         pooled_height_(this->template GetSingleArgument<int>("pooled_h", 1)),
         pooled_width_(this->template GetSingleArgument<int>("pooled_w", 1)),
         sampling_ratio_(
-            this->template GetSingleArgument<int>("sampling_ratio", -1)),
-        aligned_(this->template GetSingleArgument<bool>("aligned", false)) {
+            this->template GetSingleArgument<int>("sampling_ratio", -1)) {
     DCHECK_GT(spatial_scale_, 0);
     DCHECK_GT(pooled_height_, 0);
     DCHECK_GT(pooled_width_, 0);
@@ -38,7 +36,6 @@ class RoIAlignGradientOp final : public Operator<Context> {
   int pooled_height_;
   int pooled_width_;
   int sampling_ratio_;
-  bool aligned_;
 };
 
 } // namespace caffe2

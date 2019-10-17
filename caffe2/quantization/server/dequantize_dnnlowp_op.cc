@@ -10,15 +10,7 @@ DequantizeDNNLowPOp<T>::DequantizeDNNLowPOp(
     const OperatorDef& operator_def,
     Workspace* ws)
     : Operator<CPUContext>(operator_def, ws),
-      qfactory_(dnnlowp::GetQuantizationFactoryOf(this)) {
-  if (this->debug_def().engine() == "DNNLOWP_16" ||
-      this->debug_def().engine() == "DNNLOWP_ROWWISE_16") {
-    LOG(WARNING)
-        << this->debug_def().engine()
-        << " is an experimental feature mostly for testing accuracy with "
-           "fixed-point precision higher than 8 and performance is very slow";
-  }
-}
+      qfactory_(dnnlowp::GetQuantizationFactoryOf(this)) {}
 
 template <typename T>
 bool DequantizeDNNLowPOp<T>::RunOnDevice() {
@@ -27,12 +19,12 @@ bool DequantizeDNNLowPOp<T>::RunOnDevice() {
       GetInputTensorQuantizationParamsOf(this, 0, qfactory_.get());
 
   const TensorCPU& input = InputIsType<int8::Int8TensorCPU>(0)
-      ? this->template Input<int8::Int8TensorCPU>(0).t
+      ? OperatorBase::Input<int8::Int8TensorCPU>(0).t
       : Input(0);
 
   CAFFE_ENFORCE(input.template IsType<T>());
   Output(0)->ResizeLike(input);
-  fbgemm::Dequantize<T>(
+  Dequantize(
       input.template data<T>(),
       Output(0)->template mutable_data<float>(),
       input.numel(),

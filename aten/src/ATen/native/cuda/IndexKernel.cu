@@ -4,7 +4,7 @@
 #include <ATen/Dispatch.h>
 #include <ATen/native/TensorIterator.h>
 #include <ATen/native/cuda/Loops.cuh>
-#include <ATen/core/Array.h>
+#include <ATen/cuda/Array.h>
 
 namespace at { namespace native {
 
@@ -19,7 +19,7 @@ static OffsetCalculator<N> index_make_offset_calculator(const TensorIterator& it
 }
 
 template <typename func_t>
-void gpu_index_kernel(TensorIterator& iter, IntArrayRef index_size, IntArrayRef index_stride, const func_t& f) {
+void gpu_index_kernel(TensorIterator& iter, IntList index_size, IntList index_stride, const func_t& f) {
   int num_indices = index_size.size();
   AT_ASSERT(num_indices == index_stride.size());
   AT_ASSERT(num_indices == iter.ntensors() - 2);
@@ -28,16 +28,9 @@ void gpu_index_kernel(TensorIterator& iter, IntArrayRef index_size, IntArrayRef 
     return;
   }
 
-  if (!iter.can_use_32bit_indexing()) {
-    for (auto& sub_iter : iter.with_32bit_indexing()) {
-      gpu_index_kernel(sub_iter, index_size, index_stride, f);
-    }
-    return;
-  }
-
-  auto sizes = at::detail::Array<int64_t, 25>(0);
-  auto strides = at::detail::Array<int64_t, 25>(0);
-  auto index_ptrs = at::detail::Array<char*, 25>(nullptr);
+  auto sizes = cuda::Array<int64_t, 25>(0);
+  auto strides = cuda::Array<int64_t, 25>(0);
+  auto index_ptrs = cuda::Array<char*, 25>(nullptr);
   for (int i = 0; i < num_indices; i++) {
     sizes[i] = index_size[i];
     strides[i] = index_stride[i];
@@ -48,7 +41,7 @@ void gpu_index_kernel(TensorIterator& iter, IntArrayRef index_size, IntArrayRef 
   char* in_ptr = (char*)iter.data_ptr(1);
 
   auto offset_calc = index_make_offset_calculator<3>(iter);
-  launch_kernel<launch_size_nd, launch_bound2>(iter.numel(), [=]__device__(int idx) {
+  launch_kernel<128, 4>(iter.numel(), [=]__device__(int idx) {
     auto offsets = offset_calc.get(idx);
     char* out_data = out_ptr + offsets[0];
     char* in_data = in_ptr + offsets[1];
@@ -74,30 +67,30 @@ template <int N> struct alignas(N) OpaqueType { char data[N]; };
 
 
 template <typename scalar_t>
-void index_kernel_impl(TensorIterator& iter, IntArrayRef index_size, IntArrayRef index_stride) {
+void index_kernel_impl(TensorIterator& iter, IntList index_size, IntList index_stride) {
   gpu_index_kernel(iter, index_size, index_stride, []C10_DEVICE(char* out_data, char* in_data, int64_t offset) {
     *(scalar_t*)out_data = *(scalar_t*)(in_data + offset);
   });
 }
 
 template <typename scalar_t>
-void index_put_kernel_impl(TensorIterator& iter, IntArrayRef index_size, IntArrayRef index_stride) {
+void index_put_kernel_impl(TensorIterator& iter, IntList index_size, IntList index_stride) {
   gpu_index_kernel(iter, index_size, index_stride, []C10_DEVICE(char* out_data, char* in_data, int64_t offset) {
     *(scalar_t*)(out_data + offset) = *(scalar_t*)in_data;
   });
 }
 
-static void index_kernel(TensorIterator& iter, IntArrayRef index_size, IntArrayRef index_stride) {
-  AT_DISPATCH_ALL_TYPES_AND2(at::ScalarType::Half, at::ScalarType::Bool, iter.dtype(), "index_cuda", [&] {
+static void index_kernel(TensorIterator& iter, IntList index_size, IntList index_stride) {
+  AT_DISPATCH_ALL_TYPES_AND_HALF(iter.type(), "index", [&] {
     using dtype = OpaqueType<sizeof(scalar_t)>;
     index_kernel_impl<dtype>(iter, index_size, index_stride);
   });
 }
 
 
-static void index_put_kernel(TensorIterator& iter, IntArrayRef index_size, IntArrayRef index_stride, bool accumulate) {
+static void index_put_kernel(TensorIterator& iter, IntList index_size, IntList index_stride, bool accumulate) {
   AT_ASSERTM(!accumulate, "index_put does not support accumulate=true");
-  AT_DISPATCH_ALL_TYPES_AND3(at::ScalarType::Half, at::ScalarType::Bool, at::ScalarType::BFloat16, iter.dtype(), "index_put", [&] {
+  AT_DISPATCH_ALL_TYPES_AND_HALF(iter.type(), "index_put", [&] {
     using dtype = OpaqueType<sizeof(scalar_t)>;
     index_put_kernel_impl<dtype>(iter, index_size, index_stride);
   });

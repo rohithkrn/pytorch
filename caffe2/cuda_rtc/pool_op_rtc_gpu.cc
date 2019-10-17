@@ -192,12 +192,12 @@ class MaxPoolRTCOp final : public ConvPoolOpBase<CUDAContext> {
     CAFFE_ENFORCE_EQ(
         order_, StorageOrder::NCHW, "Currently only NCHW is supported.");
   }
-  ~MaxPoolRTCOp() override {}
+  ~MaxPoolRTCOp() {}
 
   bool RunOnDeviceWithOrderNCHW() override {
     auto& X = Input(0);
-    auto output_sizes = ConvPoolOpBase<CUDAContext>::GetOutputSize(X, X.dim32(1));
-    auto* Y = Output(0, output_sizes, at::dtype<float>());
+    auto* Y = Output(0);
+    ConvPoolOpBase::SetOutputSize(X, Y, X.dim32(1));
 
     if (input_dims_ != X.sizes()) {
       // recompile
@@ -250,15 +250,15 @@ class MaxPoolGradientRTCOp final : public ConvPoolOpBase<CUDAContext> {
     CAFFE_ENFORCE_EQ(
         order_, StorageOrder::NCHW, "Currently only NCHW is supported.");
   }
-  ~MaxPoolGradientRTCOp() override {}
+  ~MaxPoolGradientRTCOp() {}
 
   bool RunOnDeviceWithOrderNCHW() override {
     auto& X = Input(0);
     auto& Y = Input(1);
     auto& dY = Input(2);
     CAFFE_ENFORCE_EQ(dY.dim(), 4);
-
-    auto* dX = Output(0, X.sizes(), at::dtype<float>());
+    auto* dX = Output(0);
+    dX->ResizeLike(X);
     ConvPoolOpBase<CUDAContext>::ComputePads({X.dim32(2), X.dim32(3)});
     if (input_dims_ != X.sizes()) {
       VLOG(1) << "MaxPoolGradient RTC recompiling";

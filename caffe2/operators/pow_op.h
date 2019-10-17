@@ -20,9 +20,8 @@ class PowOp : public Operator<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
 
-  template <class... Args>
-  explicit PowOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...),
+  PowOp(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<Context>(operator_def, ws),
         OP_SINGLE_ARG(bool, "broadcast", enable_broadcast_, 0),
         OP_SINGLE_ARG(int, "axis", axis_, -1),
         OP_SINGLE_ARG(string, "axis_str", axis_str_, ""),

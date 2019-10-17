@@ -14,92 +14,54 @@ import tempfile
 import torch
 import torch._six
 from torch.utils import cpp_extension
-from common_utils import TEST_WITH_ROCM, shell
+from common_utils import TEST_WITH_ROCM
 import torch.distributed as dist
-PY36 = sys.version_info >= (3, 6)
 
 TESTS = [
     'autograd',
-    'cpp_api_parity',
     'cpp_extensions',
     'c10d',
-    'c10d_spawn',
     'cuda',
     'cuda_primary_ctx',
     'dataloader',
-    'dist_autograd_fork',
     'distributed',
     'distributions',
-    'docs_coverage',
     'expecttest',
-    'fake_quant',
     'indexing',
+    'indexing_cuda',
     'jit',
-    'logging',
-    'mkldnn',
     'multiprocessing',
     'multiprocessing_spawn',
     'nccl',
     'nn',
     'numba_integration',
     'optim',
-    'qat',
-    'quantization',
-    'quantized',
-    'quantized_tensor',
-    'quantized_nn_mods',
-    'quantizer',
     'sparse',
+    'thd_distributed',
     'torch',
     'type_info',
-    'type_hints',
     'utils',
-    'namedtuple_return_api',
-    'jit_fuser',
-    'tensorboard',
-    'namedtensor',
-    'type_promotion',
-    'jit_disabled',
-    'function_schema',
 ]
-
-# skip < 3.6 b/c fstrings added in 3.6 for jit_py3
-# skip < 3.6 for rpc_spawn and dist_autograd_spawn temporarily because
-# a segmenation fault was triggered on python 3.5,
-# rpc_spawn and dist_autograd_spawn tests were added in
-# https://github.com/pytorch/pytorch/pull/25656
-# skip < 3.6 for rpc_fork as it imports mock that is only available in 3.6, mock
-# was added to rpc_fork in https://github.com/pytorch/pytorch/pull/26997
-if PY36:
-    TESTS.extend([
-        'jit_py3',
-        'rpc_fork',
-        'rpc_spawn',
-        'dist_autograd_spawn',
-    ])
 
 WINDOWS_BLACKLIST = [
     'distributed',
-    'rpc_fork',
-    'rpc_spawn',
-    'dist_autograd_fork',
-    'dist_autograd_spawn',
+    'thd_distributed',
 ]
 
 ROCM_BLACKLIST = [
     'c10d',
-    'cpp_api_parity',
     'cpp_extensions',
     'distributed',
     'multiprocessing',
     'nccl',
-    'rpc_fork',
-    'rpc_spawn',
-    'dist_autograd_fork',
-    'dist_autograd_spawn',
+    'thd_distributed',
 ]
 
-DISTRIBUTED_TESTS_CONFIG = {}
+DISTRIBUTED_TESTS_CONFIG = {
+    'gloo': {
+        'WORLD_SIZE': '2' if torch.cuda.device_count() == 2 else '3'
+    },
+}
 
 
 if dist.is_available():
@@ -111,14 +73,21 @@ if dist.is_available():
         DISTRIBUTED_TESTS_CONFIG['nccl'] = {
             'WORLD_SIZE': '2' if torch.cuda.device_count() == 2 else '3'
         }
-    if dist.is_gloo_available():
-        DISTRIBUTED_TESTS_CONFIG['gloo'] = {
-            'WORLD_SIZE': '2' if torch.cuda.device_count() == 2 else '3'
-        }
+
+
+THD_DISTRIBUTED_TESTS_CONFIG = {
+    'tcp': {
+        'WORLD_SIZE': '3'
+    },
+    'gloo': {
+        'WORLD_SIZE': '2' if torch.cuda.device_count() == 2 else '3'
+    },
+    # THD NCCL and MPI tests are known to be flaky in CI
+}
 
 # https://stackoverflow.com/questions/2549939/get-signal-names-from-numbers-in-python
-SIGNALS_TO_NAMES_DICT = {getattr(signal, n): n for n in dir(signal)
-                         if n.startswith('SIG') and '_' not in n}
+SIGNALS_TO_NAMES_DICT = dict((getattr(signal, n), n) for n in dir(signal)
+                             if n.startswith('SIG') and '_' not in n)
 
 CPP_EXTENSIONS_ERROR = """
 Ninja (https://ninja-build.org) must be available to run C++ extensions tests,
@@ -132,20 +101,45 @@ def print_to_stderr(message):
     print(message, file=sys.stderr)
 
 
-def run_test(executable, test_module, test_directory, options, *extra_unittest_args):
+def shell(command, cwd=None):
+    sys.stdout.flush()
+    sys.stderr.flush()
+    # The folloing cool snippet is copied from Py3 core library subprocess.call
+    # only the with
+    #   1. `except KeyboardInterrupt` block added for SIGINT handling.
+    #   2. In Py2, subprocess.Popen doesn't return a context manager, so we do
+    #      `p.wait()` in a `final` block for the code to be portable.
+    #
+    # https://github.com/python/cpython/blob/71b6c1af727fbe13525fb734568057d78cea33f3/Lib/subprocess.py#L309-L323
+    assert not isinstance(command, torch._six.string_classes), "Command to shell should be a list or tuple of tokens"
+    p = subprocess.Popen(command, universal_newlines=True, cwd=cwd)
+    try:
+        return p.wait()
+    except KeyboardInterrupt:
+        # Give `p` a chance to handle KeyboardInterrupt. Without this,
+        # `pytest` can't print errors it collected so far upon KeyboardInterrupt.
+        exit_status = p.wait(timeout=5)
+        if exit_status is not None:
+            return exit_status
+        else:
+            p.kill()
+            raise
+    except:  # noqa E722, copied from python core library
+        p.kill()
+        raise
+    finally:
+        # Always call p.wait() to ensure exit
+        p.wait()
+
+
+def run_test(executable, test_module, test_directory, options):
     unittest_args = options.additional_unittest_args
     if options.verbose:
         unittest_args.append('--verbose')
     # Can't call `python -m unittest test_*` here because it doesn't run code
     # in `if __name__ == '__main__': `. So call `python test_*.py` instead.
-    argv = [test_module + '.py'] + unittest_args + list(extra_unittest_args)
-
-    command = executable + argv
+    command = executable + [test_module + '.py'] + unittest_args
     return shell(command, test_directory)
-
-
-def test_cuda_primary_ctx(executable, test_module, test_directory, options):
-    return run_test(executable, test_module, test_directory, options, '--subprocess')
 
 
 def test_cpp_extensions(executable, test_module, test_directory, options):
@@ -188,6 +182,8 @@ def test_distributed(executable, test_module, test_directory, options):
         print_to_stderr(
             'MPI not available -- MPI backend tests will be skipped')
     config = DISTRIBUTED_TESTS_CONFIG
+    if test_module == "test_thd_distributed":
+        config = THD_DISTRIBUTED_TESTS_CONFIG
     for backend, env_vars in config.items():
         if backend == 'mpi' and not mpi_available:
             continue
@@ -213,10 +209,10 @@ def test_distributed(executable, test_module, test_directory, options):
                 os.mkdir(os.path.join(tmp_dir, 'test_dir'))
                 if backend == 'mpi':
                     # test mpiexec for --noprefix option
-                    with open(os.devnull, 'w') as devnull:
-                        noprefix_opt = '--noprefix' if subprocess.call(
-                            'mpiexec -n 1 --noprefix bash -c ""', shell=True,
-                            stdout=devnull, stderr=subprocess.STDOUT) == 0 else ''
+                    devnull = open(os.devnull, 'w')
+                    noprefix_opt = '--noprefix' if subprocess.call(
+                        'mpiexec -n 1 --noprefix bash -c ""', shell=True,
+                        stdout=devnull, stderr=subprocess.STDOUT) == 0 else ''
 
                     mpiexec = ['mpiexec', '-n', '3', noprefix_opt] + executable
 
@@ -233,9 +229,9 @@ def test_distributed(executable, test_module, test_directory, options):
 
 
 CUSTOM_HANDLERS = {
-    'cuda_primary_ctx': test_cuda_primary_ctx,
     'cpp_extensions': test_cpp_extensions,
     'distributed': test_distributed,
+    'thd_distributed': test_distributed,
 }
 
 
@@ -260,11 +256,6 @@ def parse_args():
         '--verbose',
         action='store_true',
         help='print verbose information and test-by-test results')
-    parser.add_argument(
-        '--jit',
-        '--jit',
-        action='store_true',
-        help='run all jit tests')
     parser.add_argument(
         '-pt', '--pytest', action='store_true',
         help='If true, use `pytest` to execute the tests. E.g., this runs '
@@ -303,15 +294,6 @@ def parse_args():
         metavar='TESTS',
         help='select the last test to run (excludes following tests)')
     parser.add_argument(
-        '--bring-to-front',
-        nargs='+',
-        choices=TestChoices(TESTS),
-        default=[],
-        metavar='TESTS',
-        help='select a set of tests to run first. This can be used in situations'
-             ' where you want to run all tests, but care more about some set, '
-             'e.g. after making a change to a specific component')
-    parser.add_argument(
         '--ignore-win-blacklist',
         action='store_true',
         help='always run blacklisted windows tests')
@@ -334,9 +316,9 @@ def get_executable_command(options):
 
 
 def find_test_index(test, selected_tests, find_last_index=False):
-    """Find the index of the first or last occurrence of a given test/test module in the list of selected tests.
+    """Find the index of the first or last occurrence of a given test/test module in the list of seleceted tests.
 
-    This function is used to determine the indices when slicing the list of selected tests when
+    This function is used to determine the indexes when slicing the list of selected tests when
     ``options.first``(:attr:`find_last_index`=False) and/or ``options.last``(:attr:`find_last_index`=True) are used.
 
     :attr:`selected_tests` can be a list that contains multiple consequent occurrences of tests
@@ -384,11 +366,6 @@ def exclude_tests(exclude_list, selected_tests, exclude_message=None):
 def get_selected_tests(options):
     selected_tests = options.include
 
-    if options.bring_to_front:
-        to_front = set(options.bring_to_front)
-        selected_tests = options.bring_to_front + list(filter(lambda name: name not in to_front,
-                                                              selected_tests))
-
     if options.first:
         first_index = find_test_index(options.first, selected_tests)
         selected_tests = selected_tests[first_index:]
@@ -400,11 +377,10 @@ def get_selected_tests(options):
     selected_tests = exclude_tests(options.exclude, selected_tests)
 
     if sys.platform == 'win32' and not options.ignore_win_blacklist:
+        ostype = os.environ.get('MSYSTEM')
         target_arch = os.environ.get('VSCMD_ARG_TGT_ARCH')
-        if target_arch != 'x64':
+        if ostype != 'MINGW64' or target_arch != 'x64':
             WINDOWS_BLACKLIST.append('cpp_extensions')
-            WINDOWS_BLACKLIST.append('jit')
-            WINDOWS_BLACKLIST.append('jit_fuser')
 
         selected_tests = exclude_tests(WINDOWS_BLACKLIST, selected_tests, 'on Windows')
 
@@ -426,9 +402,6 @@ def main():
 
     if options.coverage:
         shell(['coverage', 'erase'])
-
-    if options.jit:
-        selected_tests = filter(lambda test_name: "jit" in test_name, TESTS)
 
     for test in selected_tests:
         test_name = 'test_{}'.format(test)

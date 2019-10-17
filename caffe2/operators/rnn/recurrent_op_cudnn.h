@@ -32,13 +32,7 @@ template <typename T>
 class RecurrentBaseOp : public Operator<CUDAContext> {
  public:
   USE_OPERATOR_FUNCTIONS(CUDAContext);
-  template<class... Args> explicit RecurrentBaseOp(Args&&... args)
-  : Operator<CUDAContext>(std::forward<Args>(args)...), cudnn_wrapper_(&context_) {
-      CUDNN_ENFORCE(cudnnCreateDropoutDescriptor(&dropoutDesc_));
-      CUDNN_ENFORCE(cudnnCreateRNNDescriptor(&rnnDesc_));
-      CUDNN_ENFORCE(cudnnCreateFilterDescriptor(&wDesc_));
-      CUDNN_ENFORCE(cudnnCreateTensorDescriptor(&hxDesc_));
-  }
+  RecurrentBaseOp(const OperatorDef& operator_def, Workspace* ws);
   virtual ~RecurrentBaseOp();
 
  protected:
@@ -90,9 +84,8 @@ template <typename T>
 class RecurrentOp : public RecurrentBaseOp<T> {
  public:
   USE_RECURRENT_BASE_FUNCTIONS
-  template <class... Args>
-  explicit RecurrentOp(Args&&... args)
-      : RecurrentBaseOp<T>(std::forward<Args>(args)...) {}
+  RecurrentOp(const OperatorDef& operator_def, Workspace* ws)
+      : RecurrentBaseOp<T>(operator_def, ws) {}
 
   bool RunOnDevice() override;
 
@@ -107,9 +100,8 @@ template <typename T, RecurrentParamOpMode mode>
 class RecurrentParamAccessOp : public RecurrentBaseOp<T> {
  public:
   USE_RECURRENT_BASE_FUNCTIONS
-  template <class... Args>
-  explicit RecurrentParamAccessOp(Args&&... args)
-      : RecurrentBaseOp<T>(std::forward<Args>(args)...) {}
+  RecurrentParamAccessOp(const OperatorDef& operator_def, Workspace* ws)
+      : RecurrentBaseOp<T>(operator_def, ws) {}
 
   bool RunOnDevice() override;
 };
@@ -118,9 +110,8 @@ template <typename T>
 class RecurrentGradientOp : public RecurrentBaseOp<T> {
  public:
   USE_RECURRENT_BASE_FUNCTIONS
-  template <class... Args>
-  explicit RecurrentGradientOp(Args&&... args)
-      : RecurrentBaseOp<T>(std::forward<Args>(args)...) {}
+  RecurrentGradientOp(const OperatorDef& operator_def, Workspace* ws)
+      : RecurrentBaseOp<T>(operator_def, ws) {}
 
   bool RunOnDevice() override;
 

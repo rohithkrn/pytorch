@@ -117,10 +117,10 @@ namespace {
 
 
 static PySequenceMethods THPSize_as_sequence = {
-  nullptr,                                          /* sq_length */
+  PyTuple_Type.tp_as_sequence->sq_length,
   wrap_tuple_fn<decltype(&sq_concat), &sq_concat>,
   wrap_tuple_fn<decltype(&sq_repeat), &sq_repeat>,
-  nullptr,                                          /* sq_item */
+  PyTuple_Type.tp_as_sequence->sq_item,
 #if PY_MAJOR_VERSION == 2
   wrap_tuple_fn<decltype(&sq_slice), &sq_slice>,
 #else
@@ -128,16 +128,16 @@ static PySequenceMethods THPSize_as_sequence = {
 #endif
   nullptr,                                          /* sq_ass_item */
   nullptr,                                          /* sq_ass_slice */
-  nullptr                                           /* sq_contains */
+  PyTuple_Type.tp_as_sequence->sq_contains
 };
 
 static PyMappingMethods THPSize_as_mapping = {
-    nullptr,                                        /* mp_length */
+    PyTuple_Type.tp_as_mapping->mp_length,
     wrap_tuple_fn<decltype(&mp_subscript), &mp_subscript>,
     nullptr
 };
 
-static PyObject *THPSize_numel(THPSize *self, PyObject *noargs)
+static PyObject *THPSize_numel(THPSize *self)
 {
   HANDLE_TH_ERRORS
   int64_t numel = 1;
@@ -148,35 +148,8 @@ static PyObject *THPSize_numel(THPSize *self, PyObject *noargs)
   END_HANDLE_TH_ERRORS
 }
 
-static PyObject *THPSize_reduce(THPSize *self, PyObject *noargs)
-{
-  HANDLE_TH_ERRORS
-  auto ret = THPObjectPtr{PyTuple_New(2)};
-  if (!ret) throw python_error();
-
-  auto obj = (PyObject*)(&THPSizeType);
-  Py_INCREF(&THPSizeType);
-  PyTuple_SET_ITEM(ret.get(), 0, obj);
-
-  THPObjectPtr t(PyTuple_New(PyTuple_Size((PyObject*)self)));
-  if (!t) throw python_error();
-  for (Py_ssize_t i = 0; i < PyTuple_Size((PyObject*)self); ++i) {
-    auto d = PyTuple_GET_ITEM(self, i);
-    Py_INCREF(d);
-    PyTuple_SET_ITEM(t.get(), i, d);
-  }
-
-  THPObjectPtr dims(Py_BuildValue("(O)", t.get()));
-  if (!dims) throw python_error();
-  PyTuple_SET_ITEM(ret.get(), 1, dims.release());
-
-  return ret.release();
-  END_HANDLE_TH_ERRORS
-}
-
 static PyMethodDef THPSize_methods[] = {
   {"numel",       (PyCFunction)THPSize_numel,       METH_NOARGS,  nullptr},
-  {"__reduce__",  (PyCFunction)THPSize_reduce,      METH_NOARGS,  nullptr},
   {nullptr}
 };
 

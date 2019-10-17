@@ -4,14 +4,15 @@
 #include <iostream>
 #include <sstream>
 
+
 using namespace std;
 namespace at {
 
-DLDataType getDLDataType(const Tensor& t) {
+static DLDataType getDLDataType(const Type& type) {
   DLDataType dtype;
   dtype.lanes = 1;
-  dtype.bits = t.element_size() * 8;
-  switch (t.scalar_type()) {
+  dtype.bits = type.elementSizeInBytes() * 8;
+  switch (type.scalarType()) {
     case ScalarType::Byte:
       dtype.code = DLDataTypeCode::kDLUInt;
       break;
@@ -36,21 +37,6 @@ DLDataType getDLDataType(const Tensor& t) {
     case ScalarType::Half:
       dtype.code = DLDataTypeCode::kDLFloat;
       break;
-    case ScalarType::Bool:
-      dtype.code = DLDataTypeCode::kDLUInt;
-      break;
-    case ScalarType::BFloat16:
-      throw std::logic_error("BFloat16 is not supported by dlpack");
-      break;
-    case ScalarType::QInt8:
-      throw std::logic_error("QInt8 is not supported by dlpack");
-      break;
-    case ScalarType::QUInt8:
-      throw std::logic_error("QUInt8 is not supported by dlpack");
-      break;
-    case ScalarType::QInt32:
-      throw std::logic_error("QInt32 is not supported by dlpack");
-      break;
     case ScalarType::ComplexHalf:
       throw std::logic_error("ComplexHalf is not supported by dlpack");
     case ScalarType::ComplexFloat:
@@ -65,10 +51,11 @@ DLDataType getDLDataType(const Tensor& t) {
   return dtype;
 }
 
-DLContext getDLContext(const Tensor& tensor, const int64_t& device_id) {
+
+static DLContext getDLContext(const Type& type, const int64_t& device_id) {
   DLContext ctx;
   ctx.device_id = device_id;
-  if (tensor.is_cuda()) {
+  if (type.is_cuda()) {
     ctx.device_type = DLDeviceType::kDLGPU;
   } else {
     ctx.device_type = DLDeviceType::kDLCPU;
@@ -76,26 +63,27 @@ DLContext getDLContext(const Tensor& tensor, const int64_t& device_id) {
   return ctx;
 }
 
-static Device getATenDevice(const DLContext& ctx) {
+
+static DeviceType getATenDeviceType(const DLContext& ctx) {
   switch (ctx.device_type) {
     case DLDeviceType::kDLCPU:
-      return at::Device(DeviceType::CPU);
+      return DeviceType::CPU;
     case DLDeviceType::kDLGPU:
-      return at::Device(DeviceType::CUDA, ctx.device_id);
+      return DeviceType::CUDA;
     case DLDeviceType::kDLOpenCL:
-      return at::Device(DeviceType::OPENCL, ctx.device_id);
+      return DeviceType::OPENCL;
     case DLDeviceType::kDLROCM:
-      return at::Device(DeviceType::HIP, ctx.device_id);
+      return DeviceType::HIP;
     default:
-      throw std::logic_error(
-          "Unsupported device_type: " + std::to_string(ctx.device_type));
+      throw std::logic_error("Unsupported device_type: " + std::to_string(ctx.device_type));
   }
+  return DeviceType::CPU; // impossible
 }
+
 
 ScalarType toScalarType(const DLDataType& dtype) {
   ScalarType stype;
-  if (dtype.lanes != 1)
-    throw std::logic_error("ATen does not support lanes != 1");
+  if (dtype.lanes != 1) throw std::logic_error("ATen does not support lanes != 1");
   switch (dtype.code) {
     case DLDataTypeCode::kDLUInt:
       switch (dtype.bits) {
@@ -103,8 +91,7 @@ ScalarType toScalarType(const DLDataType& dtype) {
           stype = ScalarType::Byte;
           break;
         default:
-          throw std::logic_error(
-              "Unsupported kUInt bits " + std::to_string(dtype.bits));
+          throw std::logic_error("Unsupported kUInt bits " + std::to_string(dtype.bits));
       }
       break;
     case DLDataTypeCode::kDLInt:
@@ -122,8 +109,7 @@ ScalarType toScalarType(const DLDataType& dtype) {
           stype = ScalarType::Long;
           break;
         default:
-          throw std::logic_error(
-              "Unsupported kInt bits " + std::to_string(dtype.bits));
+          throw std::logic_error("Unsupported kInt bits " + std::to_string(dtype.bits));
       }
       break;
     case DLDataTypeCode::kDLFloat:
@@ -138,8 +124,7 @@ ScalarType toScalarType(const DLDataType& dtype) {
           stype = ScalarType::Double;
           break;
         default:
-          throw std::logic_error(
-              "Unsupported kFloat bits " + std::to_string(dtype.bits));
+          throw std::logic_error("Unsupported kFloat bits " + std::to_string(dtype.bits));
       }
       break;
     default:
@@ -153,14 +138,15 @@ struct ATenDLMTensor {
   DLManagedTensor tensor;
 };
 
-void deleter(DLManagedTensor* arg) {
+void deleter(DLManagedTensor * arg) {
   delete static_cast<ATenDLMTensor*>(arg->manager_ctx);
 }
 
-// This function returns a shared_ptr to memory managed DLpack tensor
-// constructed out of ATen tensor
+
+// This function returns a shared_ptr to memory managed DLpack tensor constructed
+// out of ATen tensor
 DLManagedTensor* toDLPack(const Tensor& src) {
-  ATenDLMTensor* atDLMTensor(new ATenDLMTensor);
+  ATenDLMTensor * atDLMTensor(new ATenDLMTensor);
   atDLMTensor->handle = src;
   atDLMTensor->tensor.manager_ctx = atDLMTensor;
   atDLMTensor->tensor.deleter = &deleter;
@@ -169,35 +155,26 @@ DLManagedTensor* toDLPack(const Tensor& src) {
   if (src.is_cuda()) {
     device_id = src.get_device();
   }
-  atDLMTensor->tensor.dl_tensor.ctx = getDLContext(src, device_id);
+  atDLMTensor->tensor.dl_tensor.ctx = getDLContext(src.type(), device_id);
   atDLMTensor->tensor.dl_tensor.ndim = src.dim();
-  atDLMTensor->tensor.dl_tensor.dtype = getDLDataType(src);
-  atDLMTensor->tensor.dl_tensor.shape =
-      const_cast<int64_t*>(src.sizes().data());
-  atDLMTensor->tensor.dl_tensor.strides =
-      const_cast<int64_t*>(src.strides().data());
+  atDLMTensor->tensor.dl_tensor.dtype = getDLDataType(src.type());
+  atDLMTensor->tensor.dl_tensor.shape = const_cast<int64_t*>(src.sizes().data());
+  atDLMTensor->tensor.dl_tensor.strides = const_cast<int64_t*>(src.strides().data());
   atDLMTensor->tensor.dl_tensor.byte_offset = 0;
   return &(atDLMTensor->tensor);
 }
 
+
 Tensor fromDLPack(const DLManagedTensor* src) {
-  Device device = getATenDevice(src->dl_tensor.ctx);
+  DeviceType device_type = getATenDeviceType(src->dl_tensor.ctx);
   ScalarType stype = toScalarType(src->dl_tensor.dtype);
-  auto deleter = [src](void* self) {
+  auto deleter = [src](void * self) {
     src->deleter(const_cast<DLManagedTensor*>(src));
   };
-  if (!src->dl_tensor.strides) {
-    return at::from_blob(src->dl_tensor.data,
-        IntArrayRef(src->dl_tensor.shape, src->dl_tensor.ndim),
-        deleter,
-        at::device(device).dtype(stype));
-  }
-
-  return at::from_blob(
-      src->dl_tensor.data,
-      IntArrayRef(src->dl_tensor.shape, src->dl_tensor.ndim),
-      IntArrayRef(src->dl_tensor.strides, src->dl_tensor.ndim),
+  return at::from_blob(src->dl_tensor.data,
+      IntList(src->dl_tensor.shape, src->dl_tensor.ndim),
+      IntList(src->dl_tensor.strides, src->dl_tensor.ndim),
       deleter,
-      at::device(device).dtype(stype));
+      at::device(device_type).dtype(stype));
 }
-} // namespace at
+} //namespace at

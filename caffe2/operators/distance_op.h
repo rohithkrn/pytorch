@@ -10,9 +10,8 @@ namespace caffe2 {
 template <typename T, class Context>
 class SquaredL2DistanceOp : public Operator<Context> {
  public:
-  template <class... Args>
-  explicit SquaredL2DistanceOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...) {}
+  SquaredL2DistanceOp(const OperatorDef& def, Workspace* ws)
+      : Operator<Context>(def, ws) {}
   USE_OPERATOR_CONTEXT_FUNCTIONS;
 
   bool RunOnDevice() override;
@@ -24,9 +23,8 @@ class SquaredL2DistanceOp : public Operator<Context> {
 template <typename T, class Context>
 class SquaredL2DistanceGradientOp final : public Operator<Context> {
  public:
-  template <class... Args>
-  explicit SquaredL2DistanceGradientOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...) {}
+  SquaredL2DistanceGradientOp(const OperatorDef& def, Workspace* ws)
+      : Operator<Context>(def, ws) {}
   USE_OPERATOR_CONTEXT_FUNCTIONS;
 
   bool RunOnDevice() override {
@@ -75,9 +73,8 @@ class SquaredL2DistanceGradientOp final : public Operator<Context> {
 template <typename T, class Context>
 class L1DistanceOp : public Operator<Context> {
  public:
-  template <class... Args>
-  explicit L1DistanceOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...) {}
+  L1DistanceOp(const OperatorDef& def, Workspace* ws)
+      : Operator<Context>(def, ws) {}
   USE_OPERATOR_CONTEXT_FUNCTIONS;
 
   bool RunOnDevice() override;
@@ -89,9 +86,8 @@ class L1DistanceOp : public Operator<Context> {
 template <typename T, class Context>
 class L1DistanceGradientOp : public Operator<Context> {
  public:
-  template <class... Args>
-  explicit L1DistanceGradientOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...) {}
+  L1DistanceGradientOp(const OperatorDef& def, Workspace* ws)
+      : Operator<Context>(def, ws) {}
   USE_OPERATOR_CONTEXT_FUNCTIONS;
 
   bool RunOnDevice() override;
@@ -103,9 +99,8 @@ class L1DistanceGradientOp : public Operator<Context> {
 template <typename T, class Context>
 class DotProductOp : public Operator<Context> {
  public:
-  template <class... Args>
-  explicit DotProductOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...) {}
+  DotProductOp(const OperatorDef& def, Workspace* ws)
+      : Operator<Context>(def, ws) {}
   USE_OPERATOR_CONTEXT_FUNCTIONS;
 
   bool RunOnDevice() override;
@@ -118,9 +113,8 @@ class DotProductOp : public Operator<Context> {
 template <typename T, class Context>
 class DotProductGradientOp final : public Operator<Context> {
  public:
-  template <class... Args>
-  explicit DotProductGradientOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...) {}
+  DotProductGradientOp(const OperatorDef& def, Workspace* ws)
+      : Operator<Context>(def, ws) {}
   USE_OPERATOR_CONTEXT_FUNCTIONS;
 
   bool RunOnDevice() override;
@@ -133,12 +127,10 @@ class DotProductGradientOp final : public Operator<Context> {
 template <typename T, class Context>
 class DotProductWithPaddingOp : public Operator<Context> {
  public:
-  template <class... Args>
-  explicit DotProductWithPaddingOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...),
+  DotProductWithPaddingOp(const OperatorDef& def, Workspace* ws)
+      : Operator<Context>(def, ws),
         pad_value_(this->template GetSingleArgument<float>("pad_value", 0.0)),
-        replicate_(this->template GetSingleArgument<bool>("replicate", false)) {
-  }
+        replicate_(this->template GetSingleArgument<bool>("replicate", false)) {}
   USE_OPERATOR_CONTEXT_FUNCTIONS;
 
   bool RunOnDevice() override;
@@ -153,9 +145,8 @@ class DotProductWithPaddingOp : public Operator<Context> {
 template <typename T, class Context>
 class CosineSimilarityOp : public Operator<Context> {
  public:
-  template <class... Args>
-  explicit CosineSimilarityOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...) {}
+  CosineSimilarityOp(const OperatorDef& def, Workspace* ws)
+      : Operator<Context>(def, ws) {}
   USE_OPERATOR_CONTEXT_FUNCTIONS;
 
   bool RunOnDevice() override;
@@ -165,15 +156,14 @@ class CosineSimilarityOp : public Operator<Context> {
   OUTPUT_TAGS(COS_OUT);
 
  private:
-  Tensor aux_;
+  Tensor aux_{Context::GetDeviceType()};
 };
 
 template <typename T, class Context>
 class CosineSimilarityGradientOp final : public Operator<Context> {
  public:
-  template <class... Args>
-  explicit CosineSimilarityGradientOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...) {}
+  CosineSimilarityGradientOp(const OperatorDef& def, Workspace* ws)
+      : Operator<Context>(def, ws) {}
   USE_OPERATOR_CONTEXT_FUNCTIONS;
 
   bool RunOnDevice() override;
@@ -183,18 +173,16 @@ class CosineSimilarityGradientOp final : public Operator<Context> {
   OUTPUT_TAGS(DER_X_OUT, DER_Y_OUT);
 
  private:
-  Tensor aux_;
+  Tensor aux_{Context::GetDeviceType()};
 };
 
 template <typename T, class Context>
 class DotProductWithPaddingGradientOp final : public Operator<Context> {
  public:
-  template <class... Args>
-  explicit DotProductWithPaddingGradientOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...),
+  DotProductWithPaddingGradientOp(const OperatorDef& def, Workspace* ws)
+      : Operator<Context>(def, ws),
         pad_value_(this->template GetSingleArgument<float>("pad_value", 0.0)),
-        replicate_(this->template GetSingleArgument<bool>("replicate", false)) {
-  }
+        replicate_(this->template GetSingleArgument<bool>("replicate", false)) {}
   USE_OPERATOR_CONTEXT_FUNCTIONS;
 
   bool RunOnDevice() override {
@@ -259,8 +247,7 @@ class DotProductWithPaddingGradientOp final : public Operator<Context> {
               DS, dDot_data[i], S_data, dL_data + j * DS, &context_);
           math::Scale<T, T, Context>(
               DS, dDot_data[i], L_data + j * DS, tmp_data.data(), &context_);
-          math::Axpy<float, T, Context>(
-              DS, 1.0, tmp_data.data(), dS_data, &context_);
+          math::Axpy<T, Context>(DS, 1.0, tmp_data.data(), dS_data, &context_);
         }
       } else {
         math::Scale<T, T, Context>(

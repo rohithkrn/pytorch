@@ -1,18 +1,17 @@
-#include "caffe2/operators/conv_pool_op_base.h"
+#include "caffe2/core/context_gpu.h"
 
 #include "caffe2/core/common_gpu.h"
-#include "caffe2/core/context_gpu.h"
 #include "caffe2/core/cudnn_wrappers.h"
 #include "caffe2/operators/conv_op.h"
 #include "caffe2/operators/conv_op_cache_cudnn.h"
+#include "caffe2/operators/conv_pool_op_base.h"
 #include "caffe2/operators/op_utils_cudnn.h"
-#include "caffe2/utils/math.h"
 
 namespace caffe2 {
 
 class CudnnConvOpBase : public ConvPoolOpBase<CUDAContext> {
  public:
-  explicit CudnnConvOpBase(const OperatorDef& operator_def, Workspace* ws)
+  CudnnConvOpBase(const OperatorDef& operator_def, Workspace* ws)
       : ConvPoolOpBase<CUDAContext>(operator_def, ws),
         cudnn_wrapper_(&context_),
         cudnn_ws_nbytes_limit_(OperatorBase::GetSingleArgument<size_t>(
@@ -23,11 +22,8 @@ class CudnnConvOpBase : public ConvPoolOpBase<CUDAContext> {
         deterministic_(
             OperatorBase::GetSingleArgument<int>("deterministic", 0)),
         cudnn_state_(OperatorBase::GetSingleArgument<int>("cudnn_state", 0)),
-        force_algo_(OperatorBase::GetRepeatedArgument<int>(
-            "force_algo",
-            vector<int>{-1, -1, -1})),
-        enable_tensor_core_(
-            OperatorBase::GetSingleArgument<bool>("enable_tensor_core", 1)) {
+        force_algo_(OperatorBase::GetRepeatedArgument<int>("force_algo", vector<int>{-1,-1,-1})),
+        enable_tensor_core_(OperatorBase::GetSingleArgument<bool>("enable_tensor_core", 1)) {
     CHECK(!deterministic_ || !exhaustive_search_);
     CAFFE_ENFORCE(group_ > 0);
     CAFFE_ENFORCE(!deterministic_ || !exhaustive_search_);
@@ -38,18 +34,17 @@ class CudnnConvOpBase : public ConvPoolOpBase<CUDAContext> {
           "and right, which is not supported by cudnn.");
     }
     // dilated convolution supported by some algorithms in cuDNN v6
-#if !(CUDNN_VERSION_MIN(6, 0, 0))
+#if !(CUDNN_VERSION_MIN(6,0,0))
     OPERATOR_NEEDS_FEATURE(
         dilation_h() == 1 && dilation_w() == 1,
         "The cudnn convolution does not support dilation yet.");
 #endif
     // dilated grouped convolution supported in cuDNN v7.1
-#if !(CUDNN_VERSION_MIN(7, 1, 0))
+#if !(CUDNN_VERSION_MIN(7,1,0))
     if (group_ != 1) {
       for (int dim = 0; dim < kernel_.size(); ++dim) {
-        OPERATOR_NEEDS_FEATURE(
-            dilation_[dim] == 1,
-            "When group is used, dilation should not be set at the same time.");
+        OPERATOR_NEEDS_FEATURE(dilation_[dim] == 1,
+        "When group is used, dilation should not be set at the same time.");
       }
     }
 #endif
@@ -62,15 +57,14 @@ class CudnnConvOpBase : public ConvPoolOpBase<CUDAContext> {
 #endif
 
     bool individual_force_algo = OperatorBase::HasArgument("force_algo_fwd") ||
-        OperatorBase::HasArgument("force_algo_dgrad") ||
-        OperatorBase::HasArgument("force_algo_wgrad");
+                                 OperatorBase::HasArgument("force_algo_dgrad") ||
+                                 OperatorBase::HasArgument("force_algo_wgrad");
     if (OperatorBase::HasArgument("force_algo")) {
-      CAFFE_ENFORCE(
-          !individual_force_algo,
-          "Cannot specify both force_algo and any of",
-          "force_algo_fwd, force_algo_dgrad, force_algo_wgrad");
+      CAFFE_ENFORCE(!individual_force_algo,
+                   "Cannot specify both force_algo and any of",
+                   "force_algo_fwd, force_algo_dgrad, force_algo_wgrad");
     } else {
-      force_algo_ = std::vector<int>{-1, -1, -1};
+      force_algo_ = std::vector<int>{-1,-1,-1};
       force_algo_[ALGO_FWD] =
           OperatorBase::GetSingleArgument<int>("force_algo_fwd", -1);
       force_algo_[ALGO_DGRAD] =
@@ -87,7 +81,7 @@ class CudnnConvOpBase : public ConvPoolOpBase<CUDAContext> {
     CUDNN_ENFORCE(cudnnCreateConvolutionDescriptor(&conv_desc_));
   }
 
-  ~CudnnConvOpBase() override {
+  ~CudnnConvOpBase() {
     CUDNN_ENFORCE(cudnnDestroyTensorDescriptor(bottom_desc_));
     CUDNN_ENFORCE(cudnnDestroyFilterDescriptor(filter_desc_));
     CUDNN_ENFORCE(cudnnDestroyTensorDescriptor(bias_desc_));
@@ -192,7 +186,8 @@ class CudnnConvOpBase : public ConvPoolOpBase<CUDAContext> {
           &dilation_height,
           &dilation_width,
           &mode,
-          &dataType));
+          &dataType
+          ));
 #else
       CUDNN_ENFORCE(cudnnGetConvolution2dDescriptor(
           input,
@@ -202,7 +197,8 @@ class CudnnConvOpBase : public ConvPoolOpBase<CUDAContext> {
           &stride_width,
           &dilation_height,
           &dilation_width,
-          &mode));
+          &mode
+          ));
 #endif
 
 #if CUDNN_VERSION_MIN(6, 0, 0)
@@ -215,7 +211,8 @@ class CudnnConvOpBase : public ConvPoolOpBase<CUDAContext> {
           dilation_height,
           dilation_width,
           mode,
-          dataType));
+          dataType
+          ));
 #else
       CUDNN_ENFORCE(cudnnSetConvolution2dDescriptor(
           copy,
@@ -225,7 +222,8 @@ class CudnnConvOpBase : public ConvPoolOpBase<CUDAContext> {
           stride_width,
           dilation_height,
           dilation_width,
-          mode));
+          mode
+          ));
 #endif
     } else {
       cudnnConvolutionMode_t mode;
@@ -348,7 +346,8 @@ class CudnnConvOpBase : public ConvPoolOpBase<CUDAContext> {
           &dilation_height,
           &dilation_width,
           &mode,
-          &dataType));
+          &dataType
+          ));
 #else
       CUDNN_ENFORCE(cudnnGetConvolution2dDescriptor(
           conv_desc,
@@ -358,7 +357,8 @@ class CudnnConvOpBase : public ConvPoolOpBase<CUDAContext> {
           &stride_width,
           &dilation_height,
           &dilation_width,
-          &mode));
+          &mode
+          ));
 #endif
 
 #if CUDNN_VERSION_MIN(6, 0, 0)
@@ -371,7 +371,8 @@ class CudnnConvOpBase : public ConvPoolOpBase<CUDAContext> {
           dilation_height,
           dilation_width,
           mode,
-          math));
+          math
+          ));
 #else
       CUDNN_ENFORCE(cudnnSetConvolution2dDescriptor(
           conv_desc,
@@ -381,7 +382,8 @@ class CudnnConvOpBase : public ConvPoolOpBase<CUDAContext> {
           stride_width,
           dilation_height,
           dilation_width,
-          mode));
+          mode
+          ));
 #endif
     } else {
       cudnnConvolutionMode_t mode;
@@ -432,10 +434,10 @@ class CudnnConvOpBase : public ConvPoolOpBase<CUDAContext> {
 
 class CudnnConvOp final : public CudnnConvOpBase {
  public:
-  explicit CudnnConvOp(const OperatorDef& operator_def, Workspace* ws)
+  CudnnConvOp(const OperatorDef& operator_def, Workspace* ws)
       : CudnnConvOpBase(operator_def, ws) {}
 
-  ~CudnnConvOp() override {}
+  ~CudnnConvOp() {}
 
   template <typename T_X, typename T_W, typename T_B, typename T_Y>
   bool DoRunWithType();
@@ -453,7 +455,7 @@ class CudnnConvOp final : public CudnnConvOpBase {
 
 class CudnnConvGradientOp final : public CudnnConvOpBase {
  public:
-  explicit CudnnConvGradientOp(const OperatorDef& operator_def, Workspace* ws)
+  CudnnConvGradientOp(const OperatorDef& operator_def, Workspace* ws)
       : CudnnConvOpBase(operator_def, ws),
         no_bias_(OperatorBase::GetSingleArgument<int>("no_bias", 0)) {
     CAFFE_ENFORCE(
@@ -464,7 +466,7 @@ class CudnnConvGradientOp final : public CudnnConvOpBase {
     CUDNN_ENFORCE(cudnnCreateConvolutionDescriptor(&bwd_filter_conv_desc_));
   }
 
-  ~CudnnConvGradientOp() override {
+  ~CudnnConvGradientOp() {
     CUDNN_ENFORCE(cudnnDestroyConvolutionDescriptor(bwd_data_conv_desc_));
     CUDNN_ENFORCE(cudnnDestroyConvolutionDescriptor(bwd_filter_conv_desc_));
   }
@@ -514,14 +516,13 @@ template <typename T_X, typename T_W, typename T_B, typename T_Y>
 bool CudnnConvOp::DoRunWithType() {
   auto& X = Input(INPUT);
   auto& filter = Input(FILTER);
+  auto* Y = Output(0);
 
   // Figure out the output shape
   CAFFE_ENFORCE(X.dim() >= 3 && X.dim() <= 5);
   CAFFE_ENFORCE(filter.dim() >= 3 && filter.dim() <= 5);
   const int M = filter.dim32(0);
-  auto output_sizes = ConvPoolOpBase<CUDAContext>::GetOutputSize(X, M);
-  auto* Y = Output(0, output_sizes, at::dtype<T_Y>());
-
+  ConvPoolOpBase<CUDAContext>::SetOutputSize(X, Y, M);
   int N = 0, C = 0, H = 0, W = 0, D = 0, H_out = 0, W_out = 0, D_out = 0;
   int group_offset_X = 0, group_offset_Y = 0;
 
@@ -570,11 +571,6 @@ bool CudnnConvOp::DoRunWithType() {
       M % group_ == 0,
       "If you set group, the number of output channels should be divisible "
       "by group.");
-
-  if (N == 0) {
-    Y->template mutable_data<T_Y>();
-    return true;
-  }
 
   int group_offset_filter = filter.numel() / group_;
 
@@ -793,7 +789,7 @@ bool CudnnConvOp::DoRunWithType() {
 
   // Now, actually run the computation.
   // Run directly through cuDNN if possible
-#if CUDNN_VERSION_MIN(7, 0, 0)
+#if CUDNN_VERSION_MIN(7,0,0)
   cudnn_wrapper_.with_cudnn_state(cudnn_state_, [&](CuDNNState* state) {
     CUDNN_ENFORCE(cudnnConvolutionForward(
         state->cudnn_handle(),
@@ -949,30 +945,6 @@ bool CudnnConvGradientOp::DoRunWithType() {
     CAFFE_THROW("Unsupported kernel size:", kernel_.size());
   }
   auto* dfilter = Output(FILTER_GRAD, filter.sizes(), at::dtype<T_DW>());
-
-  if (N == 0) {
-    math::Set<T_DW, CUDAContext>(
-        dfilter->numel(),
-        T_DW(0),
-        dfilter->template mutable_data<T_DW>(),
-        &context_);
-    if (!no_bias_) {
-      auto* dbias = Output(BIAS_OR_INPUT_GRAD, {M}, at::dtype<T_DB>());
-      math::Set<T_DB, CUDAContext>(
-          dbias->numel(),
-          T_DB(0),
-          dbias->template mutable_data<T_DB>(),
-          &context_);
-    }
-    if (OutputSize() == 3 || (no_bias_ && (OutputSize() == 2))) {
-      auto* dX = Output(
-          no_bias_ ? BIAS_OR_INPUT_GRAD : INPUT_GRAD,
-          X.sizes(),
-          at::dtype<T_DX>());
-      dX->template mutable_data<T_DX>();
-    }
-    return true;
-  }
 
   // Set up the cudnn algorithms & workspace if necessary
   bool input_changed = (X.sizes() != cudnn_input_dims_);
