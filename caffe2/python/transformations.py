@@ -46,9 +46,15 @@ def fuseNNPACKConvRelu(net):
     )
 
 
-def optimizeForMKLDNN(net, training_mode = False):
+def sinkMaxPool(net):
     net.Proto().ParseFromString(
-        C.transform_optimizeForMKLDNN(net.Proto().SerializeToString(), training_mode)
+        C.transform_sinkMaxPool(net.Proto().SerializeToString())
+    )
+
+
+def optimizeForIDEEP(net, training_mode = False):
+    net.Proto().ParseFromString(
+        C.transform_optimizeForIDEEP(net.Proto().SerializeToString(), training_mode)
     )
 
 

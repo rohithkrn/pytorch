@@ -1,28 +1,7 @@
 #include "caffe2/operators/minmax_ops.h"
-
-#include <string>
-#include <vector>
-
 #include "caffe2/utils/eigen_utils.h"
 
 namespace caffe2 {
-
-template <typename T, class Context>
-bool SelectGradientOpBase<T, Context>::RunOnDevice() {
-  const auto& Y = Input(0);
-  const auto& dY = Input(1);
-  const int N = Y.numel();
-  ConstEigenVectorArrayMap<T> Y_arr(Y.template data<T>(), N);
-  ConstEigenVectorArrayMap<T> dY_arr(dY.template data<T>(), N);
-  for (int i = 0; i < OutputSize(); i++) {
-    const auto& Xi = Input(i + 2);
-    auto* dXi = Output(i, Xi.sizes(), at::dtype<T>());
-    ConstEigenVectorArrayMap<T> Xi_arr(Xi.template data<T>(), N);
-    EigenVectorArrayMap<T> dXi_arr(dXi->template mutable_data<T>(), N);
-    dXi_arr = (Xi_arr == Y_arr).template cast<T>() * dY_arr;
-  }
-  return true;
-}
 
 REGISTER_CPU_OPERATOR(MaxGradient, MaxGradientOp<float, CPUContext>);
 REGISTER_CPU_OPERATOR(MinGradient, MinGradientOp<float, CPUContext>);
@@ -30,37 +9,58 @@ REGISTER_CPU_OPERATOR(MinGradient, MinGradientOp<float, CPUContext>);
 OPERATOR_SCHEMA(MaxGradient).NumInputs(3, INT_MAX).NumOutputs(1, INT_MAX);
 OPERATOR_SCHEMA(MinGradient).NumInputs(3, INT_MAX).NumOutputs(1, INT_MAX);
 
-namespace {
+template <typename T, class Context>
+bool SelectGradientOpBase<T, Context>::RunOnDevice() {
+  auto& output = Input(0);
+  auto& grad_output = Input(1);
+  const int kInputStartOffset = 2;
+
+  const T* data = output.template data<T>();
+  ConstEigenArrayMap<T> output_array(
+      output.template data<T>(), 1, output.numel());
+  ConstEigenArrayMap<T> grad_out_array(
+      grad_output.template data<T>(), 1, grad_output.numel());
+
+  for (int i = 0; i < OutputSize(); i++) {
+    auto& input = Input(i + kInputStartOffset);
+    ConstEigenArrayMap<T> input_array(
+        input.template data<T>(), 1, input.numel());
+
+    auto* grad_input = Output(i, input.sizes(), at::dtype<T>());
+    EigenArrayMap<T> grad_in_array(
+        grad_input->template mutable_data<T>(), 1, grad_input->numel());
+    grad_in_array = grad_out_array *
+        input_array.cwiseEqual(output_array).template cast<T>();
+  }
+  return true;
+}
 
 class GetMaxGradient : public GradientMakerBase {
   using GradientMakerBase::GradientMakerBase;
-  std::vector<OperatorDef> GetGradientDefs() override {
-    std::vector<std::string> inputs = {O(0), GO(0)};
-    std::vector<std::string> grad_inputs;
-    for (int i = 0; i < def_.input_size(); ++i) {
+  vector<OperatorDef> GetGradientDefs() override {
+    auto gradInputs = vector<string>();
+    auto inputs = vector<string>{O(0), GO(0)};
+    for (int i = 0; i < def_.input_size(); i++) {
+      gradInputs.push_back(GI(i));
       inputs.push_back(I(i));
-      grad_inputs.push_back(GI(i));
     }
-    return SingleGradientDef("MaxGradient", "", inputs, grad_inputs);
+    return SingleGradientDef("MaxGradient", "", inputs, gradInputs);
   }
 };
+REGISTER_GRADIENT(Max, GetMaxGradient);
 
 class GetMinGradient : public GradientMakerBase {
   using GradientMakerBase::GradientMakerBase;
   vector<OperatorDef> GetGradientDefs() override {
-    std::vector<std::string> inputs = {O(0), GO(0)};
-    std::vector<std::string> grad_inputs;
-    for (int i = 0; i < def_.input_size(); ++i) {
+    auto gradInputs = vector<string>();
+    auto inputs = vector<string>{O(0), GO(0)};
+    for (int i = 0; i < def_.input_size(); i++) {
+      gradInputs.push_back(GI(i));
       inputs.push_back(I(i));
-      grad_inputs.push_back(GI(i));
     }
-    return SingleGradientDef("MinGradient", "", inputs, grad_inputs);
+    return SingleGradientDef("MinGradient", "", inputs, gradInputs);
   }
 };
-
-} // namespace
-
-REGISTER_GRADIENT(Max, GetMaxGradient);
 REGISTER_GRADIENT(Min, GetMinGradient);
 
 } // namespace caffe2

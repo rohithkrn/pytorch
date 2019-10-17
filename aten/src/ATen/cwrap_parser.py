@@ -1,9 +1,4 @@
 import yaml
-try:
-    # use faster C loader if available
-    from yaml import CLoader as Loader
-except ImportError:
-    from yaml import Loader
 
 # follows similar logic to cwrap, ignores !inc, and just looks for [[]]
 
@@ -20,7 +15,7 @@ def parse(filename):
                 in_declaration = True
             elif line == ']]':
                 in_declaration = False
-                declaration = yaml.load('\n'.join(declaration_lines), Loader=Loader)
+                declaration = yaml.load('\n'.join(declaration_lines))
                 declarations.append(declaration)
             elif in_declaration:
                 declaration_lines.append(line)

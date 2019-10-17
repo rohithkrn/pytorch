@@ -109,9 +109,6 @@ function(caffe2_binary_target target_name_or_src)
   if (DEFINED Caffe2_MODULES)
     target_link_libraries(${__target} ${Caffe2_MODULES})
   endif()
-  if (USE_TBB)
-    target_include_directories(${__target} PUBLIC ${TBB_ROOT_DIR}/include)
-  endif()
   install(TARGETS ${__target} DESTINATION bin)
 endfunction()
 
@@ -205,7 +202,7 @@ function(torch_compile_options libname)
     -Wno-unused-parameter
     -Wno-unknown-warning-option
     -Wno-unknown-pragmas)
-  if (WERROR)
+  if ($ENV{WERROR})
     target_compile_options(${libname} PRIVATE -Werror)
   endif()
 endfunction()

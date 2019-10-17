@@ -108,12 +108,12 @@ __global__ void MaxPoolBackward(
 template <typename T>
 bool MaxPoolWithIndexOp::DoRunWithType() {
   auto& X = Input(0);
+  auto* Y = Output(0);
+  auto* mask = Output(1);
 
-  auto sizes = ConvPoolOpBase<CUDAContext>::GetOutputSize(X, X.dim32(1));
-  auto* Y = Output(0, sizes, at::dtype<T>());
-
-  int output_size = Y->numel();
-  auto* mask = Output(1, {output_size}, at::dtype<int>());
+  ConvPoolOpBase<CUDAContext>::SetOutputSize(X, Y, X.dim32(1));
+  int output_size = Y->size();
+  mask->Resize(output_size);
 
   MaxPoolForward<T>
       <<<CAFFE_GET_BLOCKS(output_size),
@@ -142,7 +142,7 @@ bool MaxPoolWithIndexOp::DoRunWithType() {
 bool MaxPoolWithIndexOp::RunOnDevice() {
   auto& X = Input(0);
 
-  CAFFE_ENFORCE(X.dim() == 4, "Operator only supports 4D tensors");
+  CAFFE_ENFORCE(X.ndim() == 4, "Operator only supports 4D tensors");
 
   if (X.IsType<float>()) {
     return DoRunWithType<float>();
@@ -158,18 +158,19 @@ bool MaxPoolWithIndexGradientOp::DoRunWithType() {
   auto& X = Input(0);
   auto& dY = Input(1);
   auto& mask = Input(2);
+  auto* dX = Output(0);
 
-  CAFFE_ENFORCE(X.dim() == 4, "Operator only supports 4D tensors");
+  CAFFE_ENFORCE(X.ndim() == 4, "Operator only supports 4D tensors");
 
-  auto* dX = Output(0, X.sizes(), at::dtype<T>());
+  dX->ResizeLike(X);
   ConvPoolOpBase<CUDAContext>::ComputePads(vector<int>{X.dim32(2), X.dim32(3)});
 
   MaxPoolBackward<T><<<
-      CAFFE_GET_BLOCKS(X.numel()),
+      CAFFE_GET_BLOCKS(X.size()),
       CAFFE_CUDA_NUM_THREADS,
       0,
       context_.cuda_stream()>>>(
-      X.numel(),
+      X.size(),
       dY.data<T>(),
       mask.data<int>(),
       X.dim32(0),

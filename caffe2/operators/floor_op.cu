@@ -14,15 +14,15 @@ __global__ void FloorKernel(const int N, const T* X, T* Y) {
 template <>
 bool FloorOp<float, CUDAContext>::RunOnDevice() {
   auto& X = Input(0);
-
-  CAFFE_ENFORCE_GT(X.numel(), 0);
-  auto* Y = Output(0, X.sizes(), at::dtype<float>());
+  auto* Y = Output(0);
+  CAFFE_ENFORCE_GT(X.size(), 0);
+  Y->ResizeLike(X);
   FloorKernel<<<
-      CAFFE_GET_BLOCKS(X.numel()),
+      CAFFE_GET_BLOCKS(X.size()),
       CAFFE_CUDA_NUM_THREADS,
       0,
       context_.cuda_stream()>>>(
-      X.numel(), X.data<float>(), Y->template mutable_data<float>());
+      X.size(), X.data<float>(), Y->template mutable_data<float>());
   return true;
 }
 

@@ -3,6 +3,7 @@
 #include <torch/csrc/autograd/function.h>
 #include <torch/csrc/autograd/functions/basic_ops.h>
 #include <torch/csrc/autograd/functions/utils.h>
+#include <torch/csrc/autograd/generated/Functions.h>
 #include <torch/csrc/autograd/variable.h>
 
 #include <ATen/ATen.h>
@@ -26,12 +27,9 @@ auto CopyBackwards::apply(variable_list&& grads) -> variable_list {
     // TODO: What if !grad.is_cuda(), but src_device is CUDA?
     // This code is kind of weirdly asymmetric.
     if (grad.is_cuda() && grad.device() != src_device) {
-      grad_inputs[1] = grad.to(
-          src_options,
-          /*non_blocking=*/false,
-          /*copy=*/true);
+      grad_inputs[1] = src_type->copy(grad);
     } else {
-      grad_inputs[1] = grad.to(src_options);
+      grad_inputs[1] = grad.toType(*src_type);
     }
   }
   return grad_inputs;
@@ -40,8 +38,8 @@ auto CopyBackwards::apply(variable_list&& grads) -> variable_list {
 CopySlices::CopySlices(
     const Variable& base_var,
     at::TensorGeometry view_,
-    std::shared_ptr<Node> fn_)
-    : Node(),
+    std::shared_ptr<Function> fn_)
+    : Function(),
       base(base_var),
       view(std::move(view_)),
       fn(std::move(fn_)) {

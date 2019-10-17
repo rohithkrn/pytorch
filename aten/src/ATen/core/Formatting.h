@@ -2,6 +2,8 @@
 
 #include <c10/core/Scalar.h>
 #include <ATen/core/Tensor.h>
+#include <ATen/core/TensorMethods.h>
+#include <ATen/core/Type.h>
 #include <iostream>
 
 
@@ -10,7 +12,7 @@ CAFFE2_API std::ostream& operator<<(std::ostream& out, Backend b);
 }
 namespace at {
 
-CAFFE2_API std::ostream& operator<<(std::ostream& out, const DeprecatedTypeProperties& t);
+CAFFE2_API std::ostream& operator<<(std::ostream& out, const Type& t);
 CAFFE2_API std::ostream& print(
     std::ostream& stream,
     const Tensor& tensor,

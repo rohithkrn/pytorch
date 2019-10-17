@@ -14,7 +14,7 @@ static inline void THNN_(SpatialConvolutionMM_shapeCheck)(
              "kernel size should be greater than zero, but got kH: %d kW: %d", kH, kW);
   THArgCheck(dW > 0 && dH > 0, 11,
              "stride should be greater than zero, but got dH: %d dW: %d", dH, dW);
- 
+
   if (weight != NULL) {
     THCUNN_argCheck(state, !weight->is_empty() && (weight->dim() == 2 || weight->dim() == 4), 5, weight,
                     "non-empty 2D or 4D weight tensor expected, but got: %s");
@@ -36,16 +36,7 @@ static inline void THNN_(SpatialConvolutionMM_shapeCheck)(
     dimw++;
   }
 
-  // Allow for empty batch size but not other dimensions
-  bool valid_empty = false;
-  if (ndim == 3) {
-    valid_empty = input->size(0) == 0 && input->size(1) != 0 && input->size(2) != 0;
-  } else if (ndim == 4) {
-    valid_empty = input->size(0) == 0 && input->size(1) != 0 && input->size(2) != 0 && input->size(3) != 0;
-  }
-         
-
-  THCUNN_argCheck(state, (!input->is_empty() || valid_empty) && (ndim == 3 || ndim == 4), 2, input,
+  THCUNN_argCheck(state, !input->is_empty() && (ndim == 3 || ndim == 4), 2, input,
                   "non-empty 3D or 4D input tensor expected but got: %s");
 
   int64_t inputHeight  = input->size(dimh);
@@ -97,7 +88,7 @@ static THCTensor* THNN_(newViewWeightMM2d)(THCState *state, THCTensor *weight) {
     int64_t s2 = weight->size(1) * weight->size(2) * weight->size(3);
     THCTensor *old_weight = weight;
     weight = THCTensor_(newWithStorage2d)(state, THTensor_getStoragePtr(weight), weight->storage_offset(),
-                                          s1, -1, s2, -1);
+					  s1, -1, s2, -1);
     THCTensor_(free)(state, old_weight);
   }
   return weight;
@@ -209,14 +200,13 @@ void THNN_(SpatialConvolutionMM_updateOutput)(
     }
 
     // Extract columns:
-    at::native::im2col<scalar_t>(
+    im2col(
       THCState_getCurrentStream(state),
       THCTensor_(data)(state, input_n),
       nInputPlane, inputHeight, inputWidth,
       outputHeight, outputWidth,
       kH, kW, padH, padW, dH, dW,
-      1, 1, 
-      columns->data<scalar_t>()
+      1, 1, THCTensor_(data)(state, columns)
     );
 
     // M,N,K are dims of matrix A and B
@@ -341,7 +331,7 @@ void THNN_(SpatialConvolutionMM_updateGradInput)(
     );
 
     // Unpack columns back into input:
-    at::native::col2im<scalar_t, accreal>(
+    col2im<scalar_t, accreal>(
       THCState_getCurrentStream(state),
       THCTensor_(data)(state, gradColumns),
       nInputPlane, inputHeight, inputWidth, outputHeight, outputWidth, kH, kW, padH, padW, dH, dW,
@@ -440,14 +430,13 @@ void THNN_(SpatialConvolutionMM_accGradParameters)(
       THCTensor_(select)(state, input_n, input, 0, elt);
 
       // Extract columns:
-      at::native::im2col<scalar_t>(
+      im2col(
         THCState_getCurrentStream(state),
         THCTensor_(data)(state, input_n),
         nInputPlane, inputHeight, inputWidth,
         outputHeight, outputWidth,
         kH, kW, padH, padW, dH, dW,
-        1, 1, 
-        columns->data<scalar_t>()
+        1, 1, THCTensor_(data)(state, columns)
       );
 
       // M,N,K are dims of matrix A and B

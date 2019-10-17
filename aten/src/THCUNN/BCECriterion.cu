@@ -1,7 +1,7 @@
 #include <THCUNN/THCUNN.h>
 #include <THCUNN/common.h>
 #include <TH/THHalf.h>
-#include <THC/THCNumerics.cuh>
+#include <THCUNN/THCHalfAutoNumerics.cuh>
 #include <THC/THCThrustAllocator.cuh>
 #include <THC/THCApply.cuh>
 
@@ -25,9 +25,9 @@ template <typename T>
 inline __host__ __device__ T safe_log(T a) {
   if (a == 0.)
   {
-    return std::log(eps<T>());
+    return THCNumerics<T>::log(eps<T>());
   }
-  return std::log(a);
+  return THCNumerics<T>::log(a);
 }
 
 template <typename Dtype, typename Acctype>

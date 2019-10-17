@@ -17,26 +17,26 @@ void THNN_(MultiLabelMarginCriterion_updateOutput)(
   int64_t t, d, dt, ddt;
   scalar_t sum;
 
-  TORCH_CHECK(!input->is_empty() && input->dim() <= 2,
+  AT_CHECK(!input->is_empty() && input->dim() <= 2,
            "non-empty vector or matrix expected, got size: ", input->sizes());
 
   if (input->dim() <= 1)
   {
     nframe = 1;
     dim = THTensor_sizeLegacyNoScalars(input, 0);
-    TORCH_CHECK(!target->is_empty() && (target->dim() <= 1) && (THTensor_sizeLegacyNoScalars(target, 0) == dim),
+    AT_CHECK(!target->is_empty() && (target->dim() <= 1) && (THTensor_sizeLegacyNoScalars(target, 0) == dim),
              "inconsistent target size");
   }
   else
   {
     nframe = input->size(0);
     dim = input->size(1);
-    TORCH_CHECK(!target->is_empty() && target->dim() == 2 && (target->size(0) == nframe)
+    AT_CHECK(!target->is_empty() && target->dim() == 2 && (target->size(0) == nframe)
              && (target->size(1) == dim), "inconsistent target size");
   }
 
-  THArgCheck(THIndexTensor_(minall)(target) >= -1, 3, "target out of range");
-  THArgCheck(THIndexTensor_(maxall)(target) < dim, 3, "target out of range");
+  THArgCheck(THIndexTensor_(minall)(target) >= -1+TH_INDEX_BASE, 3, "target out of range");
+  THArgCheck(THIndexTensor_(maxall)(target) < dim+TH_INDEX_BASE, 3, "target out of range");
 
   target = THIndexTensor_(newContiguous)(target);
   input = THTensor_(newContiguous)(input);
@@ -58,14 +58,14 @@ void THNN_(MultiLabelMarginCriterion_updateOutput)(
     {
       for (ddt = 0; ddt < dim; ddt++)
       {
-        THIndex_t target_idx = target_data[ddt];
+        THIndex_t target_idx = target_data[ddt] - TH_INDEX_BASE;
         if (target_idx < 0)
           break;
         isTarget_data[target_idx] = 1;
       }
       for (dt = 0; dt < dim; dt++)
       {
-        THIndex_t target_idx = target_data[dt];
+        THIndex_t target_idx = target_data[dt] - TH_INDEX_BASE;
         scalar_t input_target;
         if (target_idx < 0)
           break;
@@ -102,7 +102,7 @@ void THNN_(MultiLabelMarginCriterion_updateOutput)(
   {
     for (ddt = 0; ddt < dim; ddt++)
     {
-      THIndex_t target_idx = target_data[ddt];
+      THIndex_t target_idx = target_data[ddt] - TH_INDEX_BASE;
       if (target_idx < 0)
         break;
       isTarget_data[target_idx] = 1;
@@ -111,7 +111,7 @@ void THNN_(MultiLabelMarginCriterion_updateOutput)(
     sum = 0;
     for (dt = 0; dt < dim; dt++)
     {
-      THIndex_t target_idx = target_data[dt];
+      THIndex_t target_idx = target_data[dt] - TH_INDEX_BASE;
       scalar_t input_target;
       if (target_idx < 0)
         break;
@@ -157,30 +157,30 @@ void THNN_(MultiLabelMarginCriterion_updateGradInput)(
   int64_t t, d, dt;
   scalar_t g;
 
-  TORCH_CHECK(!input->is_empty() && input->dim() <= 2,
+  AT_CHECK(!input->is_empty() && input->dim() <= 2,
            "vector or matrix expected, got size: ", input->sizes());
 
   if (input->dim() <= 1)
   {
     nframe = 1;
     dim = THTensor_sizeLegacyNoScalars(input, 0);
-    TORCH_CHECK((!target->is_empty() && target->dim() <= 1) && (THTensor_sizeLegacyNoScalars(target, 0) == dim),
+    AT_CHECK((!target->is_empty() && target->dim() <= 1) && (THTensor_sizeLegacyNoScalars(target, 0) == dim),
              "inconsistent target size");
-    TORCH_CHECK((!isTarget->is_empty() && isTarget->dim() <= 1) && (THTensor_sizeLegacyNoScalars(isTarget, 0) == dim),
+    AT_CHECK((!isTarget->is_empty() && isTarget->dim() <= 1) && (THTensor_sizeLegacyNoScalars(isTarget, 0) == dim),
              "inconsistent isTarget size");
   }
   else
   {
     nframe = input->size(0);
     dim = input->size(1);
-    TORCH_CHECK(!target->is_empty() && (target->dim() == 2) && (target->size(0) == nframe)
+    AT_CHECK(!target->is_empty() && (target->dim() == 2) && (target->size(0) == nframe)
              && (target->size(1) == dim), 3, "inconsistent target size");
-    TORCH_CHECK(!isTarget->is_empty() && (isTarget->dim() == 2) && (isTarget->size(0) == nframe)
+    AT_CHECK(!isTarget->is_empty() && (isTarget->dim() == 2) && (isTarget->size(0) == nframe)
              && (isTarget->size(1) == dim), 3, "inconsistent isTarget size");
   }
 
-  THArgCheck(THIndexTensor_(minall)(target) >= -1, 3, "target out of range");
-  THArgCheck(THIndexTensor_(maxall)(target) < dim, 3, "target out of range");
+  THArgCheck(THIndexTensor_(minall)(target) >= -1+TH_INDEX_BASE, 3, "target out of range");
+  THArgCheck(THIndexTensor_(maxall)(target) < dim+TH_INDEX_BASE, 3, "target out of range");
 
   THArgCheck(THTensor_(minall)(isTarget) >= 0, 3, "isTarget out of range");
   THArgCheck(THTensor_(maxall)(isTarget) <= 1, 3, "isTarget out of range");
@@ -203,7 +203,7 @@ void THNN_(MultiLabelMarginCriterion_updateGradInput)(
   {
     for (dt = 0; dt < dim; dt++)
     {
-      THIndex_t target_idx = target_data[dt];
+      THIndex_t target_idx = target_data[dt] - TH_INDEX_BASE;
       scalar_t input_target;
       if (target_idx < 0)
         break;

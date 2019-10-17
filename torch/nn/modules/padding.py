@@ -1,11 +1,13 @@
 from .module import Module
 from .utils import _pair, _quadruple, _ntuple
 from .. import functional as F
+from ..._jit_internal import weak_module, weak_script_method
 
 
 # TODO: grad_output size asserts in THNN
 
 
+@weak_module
 class _ConstantPadNd(Module):
     __constants__ = ['padding', 'value']
 
@@ -13,6 +15,7 @@ class _ConstantPadNd(Module):
         super(_ConstantPadNd, self).__init__()
         self.value = value
 
+    @weak_script_method
     def forward(self, input):
         return F.pad(input, self.padding, 'constant', self.value)
 
@@ -20,6 +23,7 @@ class _ConstantPadNd(Module):
         return 'padding={}, value={}'.format(self.padding, self.value)
 
 
+@weak_module
 class ConstantPad1d(_ConstantPadNd):
     r"""Pads the input tensor boundaries with a constant value.
 
@@ -33,7 +37,6 @@ class ConstantPad1d(_ConstantPadNd):
     Shape:
         - Input: :math:`(N, C, W_{in})`
         - Output: :math:`(N, C, W_{out})` where
-
           :math:`W_{out} = W_{in} + \text{padding\_left} + \text{padding\_right}`
 
     Examples::
@@ -69,6 +72,7 @@ class ConstantPad1d(_ConstantPadNd):
         self.padding = _pair(padding)
 
 
+@weak_module
 class ConstantPad2d(_ConstantPadNd):
     r"""Pads the input tensor boundaries with a constant value.
 
@@ -82,9 +86,7 @@ class ConstantPad2d(_ConstantPadNd):
     Shape:
         - Input: :math:`(N, C, H_{in}, W_{in})`
         - Output: :math:`(N, C, H_{out}, W_{out})` where
-
           :math:`H_{out} = H_{in} + \text{padding\_top} + \text{padding\_bottom}`
-
           :math:`W_{out} = W_{in} + \text{padding\_left} + \text{padding\_right}`
 
     Examples::
@@ -94,6 +96,13 @@ class ConstantPad2d(_ConstantPadNd):
         >>> input
         tensor([[[ 1.6585,  0.4320],
                  [-0.8701, -0.4649]]])
+        >>> m(input)
+        tensor([[[ 3.5000,  3.5000,  3.5000,  3.5000,  3.5000,  3.5000],
+                 [ 3.5000,  3.5000,  3.5000,  3.5000,  3.5000,  3.5000],
+                 [ 3.5000,  3.5000,  1.6585,  0.4320,  3.5000,  3.5000],
+                 [ 3.5000,  3.5000, -0.8701, -0.4649,  3.5000,  3.5000],
+                 [ 3.5000,  3.5000,  3.5000,  3.5000,  3.5000,  3.5000],
+                 [ 3.5000,  3.5000,  3.5000,  3.5000,  3.5000,  3.5000]]])
         >>> m(input)
         tensor([[[ 3.5000,  3.5000,  3.5000,  3.5000,  3.5000,  3.5000],
                  [ 3.5000,  3.5000,  3.5000,  3.5000,  3.5000,  3.5000],
@@ -118,6 +127,7 @@ class ConstantPad2d(_ConstantPadNd):
         self.padding = _quadruple(padding)
 
 
+@weak_module
 class ConstantPad3d(_ConstantPadNd):
     r"""Pads the input tensor boundaries with a constant value.
 
@@ -133,11 +143,8 @@ class ConstantPad3d(_ConstantPadNd):
     Shape:
         - Input: :math:`(N, C, D_{in}, H_{in}, W_{in})`
         - Output: :math:`(N, C, D_{out}, H_{out}, W_{out})` where
-
           :math:`D_{out} = D_{in} + \text{padding\_front} + \text{padding\_back}`
-
           :math:`H_{out} = H_{in} + \text{padding\_top} + \text{padding\_bottom}`
-
           :math:`W_{out} = W_{in} + \text{padding\_left} + \text{padding\_right}`
 
     Examples::
@@ -156,9 +163,11 @@ class ConstantPad3d(_ConstantPadNd):
         self.padding = _ntuple(6)(padding)
 
 
+@weak_module
 class _ReflectionPadNd(Module):
     __constants__ = ['padding']
 
+    @weak_script_method
     def forward(self, input):
         return F.pad(input, self.padding, 'reflect')
 
@@ -166,6 +175,7 @@ class _ReflectionPadNd(Module):
         return '{}'.format(self.padding)
 
 
+@weak_module
 class ReflectionPad1d(_ReflectionPadNd):
     r"""Pads the input tensor using the reflection of the input boundary.
 
@@ -179,7 +189,6 @@ class ReflectionPad1d(_ReflectionPadNd):
     Shape:
         - Input: :math:`(N, C, W_{in})`
         - Output: :math:`(N, C, W_{out})` where
-
           :math:`W_{out} = W_{in} + \text{padding\_left} + \text{padding\_right}`
 
     Examples::
@@ -189,6 +198,9 @@ class ReflectionPad1d(_ReflectionPadNd):
         >>> input
         tensor([[[0., 1., 2., 3.],
                  [4., 5., 6., 7.]]])
+        >>> m(input)
+        tensor([[[2., 1., 0., 1., 2., 3., 2., 1.],
+                 [6., 5., 4., 5., 6., 7., 6., 5.]]])
         >>> m(input)
         tensor([[[2., 1., 0., 1., 2., 3., 2., 1.],
                  [6., 5., 4., 5., 6., 7., 6., 5.]]])
@@ -205,6 +217,7 @@ class ReflectionPad1d(_ReflectionPadNd):
         self.padding = _pair(padding)
 
 
+@weak_module
 class ReflectionPad2d(_ReflectionPadNd):
     r"""Pads the input tensor using the reflection of the input boundary.
 
@@ -220,7 +233,6 @@ class ReflectionPad2d(_ReflectionPadNd):
         - Output: :math:`(N, C, H_{out}, W_{out})` where
 
           :math:`H_{out} = H_{in} + \text{padding\_top} + \text{padding\_bottom}`
-
           :math:`W_{out} = W_{in} + \text{padding\_left} + \text{padding\_right}`
 
     Examples::
@@ -255,9 +267,11 @@ class ReflectionPad2d(_ReflectionPadNd):
         self.padding = _quadruple(padding)
 
 
+@weak_module
 class _ReplicationPadNd(Module):
     __constants__ = ['padding']
 
+    @weak_script_method
     def forward(self, input):
         return F.pad(input, self.padding, 'replicate')
 
@@ -265,6 +279,7 @@ class _ReplicationPadNd(Module):
         return '{}'.format(self.padding)
 
 
+@weak_module
 class ReplicationPad1d(_ReplicationPadNd):
     r"""Pads the input tensor using replication of the input boundary.
 
@@ -278,7 +293,6 @@ class ReplicationPad1d(_ReplicationPadNd):
     Shape:
         - Input: :math:`(N, C, W_{in})`
         - Output: :math:`(N, C, W_{out})` where
-
           :math:`W_{out} = W_{in} + \text{padding\_left} + \text{padding\_right}`
 
     Examples::
@@ -304,6 +318,7 @@ class ReplicationPad1d(_ReplicationPadNd):
         self.padding = _pair(padding)
 
 
+@weak_module
 class ReplicationPad2d(_ReplicationPadNd):
     r"""Pads the input tensor using replication of the input boundary.
 
@@ -317,9 +332,7 @@ class ReplicationPad2d(_ReplicationPadNd):
     Shape:
         - Input: :math:`(N, C, H_{in}, W_{in})`
         - Output: :math:`(N, C, H_{out}, W_{out})` where
-
           :math:`H_{out} = H_{in} + \text{padding\_top} + \text{padding\_bottom}`
-
           :math:`W_{out} = W_{in} + \text{padding\_left} + \text{padding\_right}`
 
     Examples::
@@ -354,6 +367,7 @@ class ReplicationPad2d(_ReplicationPadNd):
         self.padding = _quadruple(padding)
 
 
+@weak_module
 class ReplicationPad3d(_ReplicationPadNd):
     r"""Pads the input tensor using replication of the input boundary.
 
@@ -369,11 +383,8 @@ class ReplicationPad3d(_ReplicationPadNd):
     Shape:
         - Input: :math:`(N, C, D_{in}, H_{in}, W_{in})`
         - Output: :math:`(N, C, D_{out}, H_{out}, W_{out})` where
-
           :math:`D_{out} = D_{in} + \text{padding\_front} + \text{padding\_back}`
-
           :math:`H_{out} = H_{in} + \text{padding\_top} + \text{padding\_bottom}`
-
           :math:`W_{out} = W_{in} + \text{padding\_left} + \text{padding\_right}`
 
     Examples::
@@ -392,6 +403,7 @@ class ReplicationPad3d(_ReplicationPadNd):
         self.padding = _ntuple(6)(padding)
 
 
+@weak_module
 class ZeroPad2d(ConstantPad2d):
     r"""Pads the input tensor boundaries with zero.
 
@@ -405,9 +417,7 @@ class ZeroPad2d(ConstantPad2d):
     Shape:
         - Input: :math:`(N, C, H_{in}, W_{in})`
         - Output: :math:`(N, C, H_{out}, W_{out})` where
-
           :math:`H_{out} = H_{in} + \text{padding\_top} + \text{padding\_bottom}`
-
           :math:`W_{out} = W_{in} + \text{padding\_left} + \text{padding\_right}`
 
     Examples::

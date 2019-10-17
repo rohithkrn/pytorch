@@ -10,9 +10,8 @@ template <class Context>
 class ExpandDimsOp : public Operator<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
-  template <class... Args>
-  explicit ExpandDimsOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...),
+  ExpandDimsOp(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<Context>(operator_def, ws),
         dims_(this->template GetRepeatedArgument<int>("dims")) {
     auto originalSize = dims_.size();
     CAFFE_ENFORCE(originalSize > 0, "Parameter `dims` must be provided.");
@@ -54,9 +53,8 @@ template <class Context>
 class SqueezeOp : public Operator<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
-  template <class... Args>
-  explicit SqueezeOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...),
+  SqueezeOp(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<Context>(operator_def, ws),
         dims_(this->template GetRepeatedArgument<int>("dims")) {
     auto originalSize = dims_.size();
     CAFFE_ENFORCE(originalSize > 0, "Parameter `dims` must be provided.");
@@ -87,11 +85,11 @@ class SqueezeOp : public Operator<Context> {
   }
 
   static std::vector<int> ComputeDims(
-      at::IntArrayRef inputDims,
+      at::IntList inputDims,
       std::vector<int> dims) {
-    size_t j = 0;
+    int j = 0;
     std::vector<int> newDims;
-    for (size_t i = 0; i < inputDims.size(); ++i) {
+    for (int i = 0; i < inputDims.size(); ++i) {
       if (j < dims.size() && dims[j] == i) {
         CAFFE_ENFORCE_EQ(
             inputDims[i],

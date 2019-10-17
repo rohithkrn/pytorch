@@ -1,8 +1,6 @@
 #ifndef THC_TENSOR_TOPK_CUH
 #define THC_TENSOR_TOPK_CUH
 
-#include <c10/macros/Macros.h>
-
 template <typename T>
 struct TopKTypeConfig {};
 
@@ -137,19 +135,6 @@ struct TopKTypeConfig<at::Half> {
     assert(false);
     return ScalarConvert<int, at::Half>::to(0);
 #endif
-  }
-};
-
-template <>
-struct TopKTypeConfig<at::BFloat16> {
-  typedef uint32_t RadixType;
-
-  static inline __device__ RadixType convert(at::BFloat16 v) {
-    return 0u;
-  }
-
-  static inline __device__ at::BFloat16 deconvert(RadixType v) {
-    return ScalarConvert<int, at::BFloat16>::to(0);
   }
 };
 
@@ -374,7 +359,6 @@ __device__ void radixSelect(DataType* data,
 }
 
 template <typename T, typename IndexType, int Dim, bool Order>
-C10_LAUNCH_BOUNDS_1(1024)
 __global__ void gatherTopK(TensorInfo<T, IndexType> input,
                            IndexType inputSliceSize,
                            IndexType outputSliceSize, // aka `k`
@@ -460,7 +444,7 @@ __global__ void gatherTopK(TensorInfo<T, IndexType> input,
       IndexType indexOffset = writeIndex * indicesWithinSliceStride;
 
       topKSliceStart[topKOffset] = v;
-      indicesSliceStart[indexOffset] = i;
+      indicesSliceStart[indexOffset] = i + TH_INDEX_BASE; // to Lua index
     }
 
     writeIndexStart += carry;
@@ -492,7 +476,7 @@ __global__ void gatherTopK(TensorInfo<T, IndexType> input,
       IndexType indexOffset = writeIndex * indicesWithinSliceStride;
 
       topKSliceStart[topKOffset] = v;
-      indicesSliceStart[indexOffset] = i;
+      indicesSliceStart[indexOffset] = i + TH_INDEX_BASE; // to Lua index
     }
 
     if (carry >= topKRemaining) {

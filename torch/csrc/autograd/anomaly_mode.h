@@ -4,7 +4,7 @@
 
 namespace torch { namespace autograd {
 
-struct TORCH_API AnomalyMode {
+struct AnomalyMode {
   static bool is_enabled() {
     return _enabled;
   }
@@ -13,12 +13,12 @@ struct TORCH_API AnomalyMode {
   }
 
 private:
-  static bool _enabled;
+ TORCH_API static bool _enabled;
 };
 
 
-struct TORCH_API AnomalyMetadata {
-  virtual ~AnomalyMetadata();
+struct AnomalyMetadata {
+  virtual ~AnomalyMetadata() = default;
   virtual void store_stack() = 0;
   virtual void print_stack() = 0;
 };

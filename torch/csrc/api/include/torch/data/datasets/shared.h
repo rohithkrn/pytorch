@@ -62,11 +62,6 @@ class SharedBatchDataset : public BatchDataset<
     return dataset_.get();
   }
 
-  /// Calls `reset()` on the underlying dataset.
-  void reset() {
-    dataset_->reset();
-  }
-
  private:
   std::shared_ptr<UnderlyingDataset> dataset_;
 };

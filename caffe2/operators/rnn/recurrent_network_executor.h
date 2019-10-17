@@ -37,17 +37,7 @@ class RecurrentNetworkExecutorBase {
       : step_net_def_(step_net_def),
         recurrent_input_map_(recurrent_input_map),
         timestep_blob_(timestep_blob) {
-    const bool net_def_has_device_option = step_net_def_.has_device_option();
     for (int i = 0; i < step_net_def_.op_size(); i++) {
-      if (net_def_has_device_option) {
-        // In the case when net def specifies device option, final device option
-        // will be equal to merge of operator and net def device options, with
-        // preference to settings from the operator.
-        DeviceOption option;
-        option.CopyFrom(step_net_def_.device_option());
-        option.MergeFrom(step_net_def_.op(i).device_option());
-        step_net_def_.mutable_op(i)->mutable_device_option()->CopyFrom(option);
-      }
       op_deps_.push_back(op_deps(i));
     }
   }

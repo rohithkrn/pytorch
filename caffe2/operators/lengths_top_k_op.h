@@ -14,10 +14,8 @@ class LengthsTopKOp : public Operator<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
 
-  template <class... Args>
-  explicit LengthsTopKOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...),
-        OP_SINGLE_ARG(int, "k", k_, -1) {
+  LengthsTopKOp(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<Context>(operator_def, ws), OP_SINGLE_ARG(int, "k", k_, -1) {
     CAFFE_ENFORCE_GE(k_, 1, "k argument must be >= 1");
   }
 
@@ -32,10 +30,8 @@ class LengthsTopKOp : public Operator<Context> {
 template <typename T, class Context>
 class LengthsTopKGradientOp : public Operator<Context> {
  public:
-  template <class... Args>
-  explicit LengthsTopKGradientOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...),
-        OP_SINGLE_ARG(int, "k", k_, -1) {
+  LengthsTopKGradientOp(const OperatorDef& def, Workspace* ws)
+      : Operator<Context>(def, ws), OP_SINGLE_ARG(int, "k", k_, -1) {
     CAFFE_ENFORCE_GE(k_, 1, "k argument must be >= 1");
   }
   USE_OPERATOR_CONTEXT_FUNCTIONS;

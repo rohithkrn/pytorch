@@ -9,9 +9,8 @@ namespace caffe2 {
 template <typename T, class Context>
 class LeakyReluOp : public Operator<Context> {
  public:
-  template <class... Args>
-  explicit LeakyReluOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...), alpha_(0.01) {
+  LeakyReluOp(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<Context>(operator_def, ws), alpha_(0.01) {
     if (HasArgument("alpha")) {
       alpha_ =
           static_cast<T>(this->template GetSingleArgument<float>("alpha", 0.01));
@@ -29,9 +28,8 @@ class LeakyReluOp : public Operator<Context> {
 template <typename T, class Context>
 class LeakyReluGradientOp final : public Operator<Context> {
  public:
-  template <class... Args>
-  explicit LeakyReluGradientOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...), alpha_(0.01) {
+  LeakyReluGradientOp(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<Context>(operator_def, ws), alpha_(0.01) {
     if (HasArgument("alpha")) {
       alpha_ =
           static_cast<T>(this->template GetSingleArgument<float>("alpha", 0.01));

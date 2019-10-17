@@ -1,6 +1,6 @@
 #include "caffe2/core/context_gpu.h"
-#include "caffe2/operators/resize_op.h"
 #include "caffe2/utils/math.h"
+#include "caffe2/operators/resize_op.h"
 
 namespace caffe2 {
 
@@ -18,6 +18,7 @@ __global__ void NearestNeighborKernel(
     const float* X,
     float* Y) {
   CUDA_1D_KERNEL_LOOP(index, size) {
+
     int indexTemp = index;
     const int w = indexTemp % output_width;
     indexTemp /= output_width;
@@ -72,15 +73,16 @@ __global__ void NearestNeighborGradientKernel(
 template <>
 bool ResizeNearestOp<float, CUDAContext>::RunOnDevice() {
   const auto& X = Input(0);
+  auto* Y = Output(0);
 
-  const auto inputDims = X.sizes();
+  const auto inputDims = X.dims();
   CAFFE_ENFORCE_EQ(4, inputDims.size());
   const int batch_size = X.dim32(0), num_channels = X.dim32(1),
             input_height = X.dim32(2), input_width = X.dim32(3);
   if (InputSize() == 2) {
     const auto& scales = Input(1);
-    CAFFE_ENFORCE_EQ(scales.dim(), 1);
-    CAFFE_ENFORCE_EQ(scales.numel(), 2);
+    CAFFE_ENFORCE_EQ(scales.ndim(), 1);
+    CAFFE_ENFORCE_EQ(scales.size(), 2);
     float scales_data[2];
     context_.CopyToCPU<float>(2, scales.data<float>(), scales_data);
     height_scale_ = scales_data[0];
@@ -88,12 +90,9 @@ bool ResizeNearestOp<float, CUDAContext>::RunOnDevice() {
   }
   int output_width = input_width * width_scale_;
   int output_height = input_height * height_scale_;
-  auto* Y = Output(
-      0,
-      {batch_size, num_channels, output_height, output_width},
-      at::dtype<float>());
+  Y->Resize(batch_size, num_channels, output_height, output_width);
 
-  const auto size = Y->numel();
+  const auto size = Y->size();
   NearestNeighborKernel<<<
       CAFFE_GET_BLOCKS(size),
       CAFFE_CUDA_NUM_THREADS,
@@ -117,8 +116,9 @@ template <>
 bool ResizeNearestGradientOp<float, CUDAContext>::RunOnDevice() {
   const auto& dY = Input(0);
   const auto& X = Input(1);
+  auto* dX = Output(0);
 
-  const auto inputDims = dY.sizes();
+  const auto inputDims = dY.dims();
   CAFFE_ENFORCE_EQ(4, inputDims.size());
   const int batch_size = dY.dim32(0), num_channels = dY.dim32(1),
             input_height = dY.dim32(2), input_width = dY.dim32(3);
@@ -126,21 +126,18 @@ bool ResizeNearestGradientOp<float, CUDAContext>::RunOnDevice() {
   int output_width = X.dim32(3);
   if (InputSize() == 3) {
     const auto& scales = Input(2);
-    CAFFE_ENFORCE_EQ(scales.dim(), 1);
-    CAFFE_ENFORCE_EQ(scales.numel(), 2);
+    CAFFE_ENFORCE_EQ(scales.ndim(), 1);
+    CAFFE_ENFORCE_EQ(scales.size(), 2);
     float scales_data[2];
     context_.CopyToCPU<float>(2, scales.data<float>(), scales_data);
     height_scale_ = scales_data[0];
     width_scale_ = scales_data[1];
   }
-  auto* dX = Output(
-      0,
-      {batch_size, num_channels, output_height, output_width},
-      at::dtype<float>());
+  dX->Resize(batch_size, num_channels, output_height, output_width);
   math::Set<float, CUDAContext>(
-      dX->numel(), 0.0f, dX->template mutable_data<float>(), &context_);
+      dX->size(), 0.0f, dX->template mutable_data<float>(), &context_);
 
-  const auto size = dY.numel();
+  const auto size = dY.size();
   NearestNeighborGradientKernel<<<
       CAFFE_GET_BLOCKS(size),
       CAFFE_CUDA_NUM_THREADS,
@@ -165,8 +162,3 @@ REGISTER_CUDA_OPERATOR(
     ResizeNearestGradient,
     ResizeNearestGradientOp<float, CUDAContext>);
 } // namespace caffe2
-
-using ResizeNearestOpFloatCUDA =
-    caffe2::ResizeNearestOp<float, caffe2::CUDAContext>;
-
-C10_EXPORT_CAFFE2_OP_TO_C10_CUDA(ResizeNearest, ResizeNearestOpFloatCUDA);

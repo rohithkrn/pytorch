@@ -12,8 +12,6 @@ storage_classes = [
     'ShortStorageBase',
     'CharStorageBase',
     'ByteStorageBase',
-    'BoolStorageBase',
-    'BFloat16StorageBase',
 ]
 
 

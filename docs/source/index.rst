@@ -17,43 +17,35 @@ PyTorch is an optimized tensor library for deep learning using GPUs and CPUs.
 
    notes/*
 
-.. toctree::
-  :glob:
-  :maxdepth: 1
-  :caption: Community
-
-  community/*
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
    :caption: Package Reference
 
    torch
-   nn
-   nn.functional
    tensors
    tensor_attributes
-   torch.autograd <autograd>
+   type_info
+   sparse
    cuda
+   storage
+   nn
+   optim
+   torch.autograd <autograd>
    torch.distributed <distributed>
    torch.distributions <distributions>
-   torch.hub <hub>
    torch.jit <jit>
-   nn.init
+   torch.multiprocessing <multiprocessing>
+   bottleneck
+   checkpoint
+   cpp_extension
+   data
+   dlpack
+   hub
+   model_zoo
    onnx
-   optim
-   torch.random <random>
-   sparse
-   storage
-   torch.utils.bottleneck <bottleneck>
-   torch.utils.checkpoint <checkpoint>
-   torch.utils.cpp_extension <cpp_extension>
-   torch.utils.data <data>
-   torch.utils.dlpack <dlpack>
-   torch.utils.model_zoo <model_zoo>
-   torch.utils.tensorboard <tensorboard>
-   type_info
-   torch.__config__ <__config__>
+   torch.distributed.deprecated <distributed_deprecated>
+   torch.legacy <legacy>
 
 .. toctree::
    :glob:
@@ -62,9 +54,6 @@ PyTorch is an optimized tensor library for deep learning using GPUs and CPUs.
 
    torchvision/index
 
-* `torchaudio <https://pytorch.org/audio>`_
-
-* `torchtext <https://pytorch.org/text>`_
 
 Indices and tables
 ==================

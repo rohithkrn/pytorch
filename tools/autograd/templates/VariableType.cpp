@@ -1,8 +1,5 @@
 #include "torch/csrc/autograd/VariableTypeUtils.h"
 
-#include <ATen/TypeDefault.h>
-#include <ATen/core/op_registration/op_registration.h>
-
 // ${generated_comment}
 
 // NOTE [Sharded File]: on this file's split-into-shards state
@@ -30,17 +27,6 @@ using namespace torch::autograd::generated;
 
 namespace torch { namespace autograd {
 
-namespace VariableType {
-namespace {
 ${type_derived_method_definitions}
-}
-}
-
-namespace {
-
-auto registerer = torch::RegisterOperators()
-  ${wrapper_registrations};
-
-}
 
 }} // namespace torch::autograd

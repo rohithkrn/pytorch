@@ -9,9 +9,8 @@ class WeightedMultiSamplingOp : public Operator<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
 
-  template <class... Args>
-  explicit WeightedMultiSamplingOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...),
+  WeightedMultiSamplingOp(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<Context>(operator_def, ws),
         num_samples_(
             this->template GetSingleArgument<int64_t>("num_samples", 0)) {
     CAFFE_ENFORCE_GE(num_samples_, 0);

@@ -9,7 +9,8 @@
 #include <memory>
 #include <unordered_map>
 
-#include <c10/util/tempfile.h>
+#include <torch/csrc/utils/tempfile.h>
+#include <c10/util/Optional.h>
 
 #include <libshm/err.h>
 #include <libshm/socket.h>
@@ -86,7 +87,7 @@ int main(int argc, char *argv[]) {
 
   std::unique_ptr<ManagerServerSocket> srv_socket;
   const auto tempfile =
-      c10::try_make_tempfile(/*name_prefix=*/"torch-shm-file-");
+      torch::utils::try_make_tempfile(/*name_prefix=*/"torch-shm-file-");
   try {
     if (!tempfile.has_value()) {
       throw std::runtime_error(
@@ -110,7 +111,7 @@ int main(int argc, char *argv[]) {
     int nevents;
     if (client_sessions.size() == 0)
       timeout = SHUTDOWN_TIMEOUT;
-    SYSCHECK_ERR_RETURN_NEG1(nevents = poll(pollfds.data(), pollfds.size(), timeout));
+    SYSCHECK(nevents = poll(pollfds.data(), pollfds.size(), timeout));
     timeout = -1;
     if (nevents == 0 && client_sessions.size() == 0)
       break;
@@ -120,7 +121,6 @@ int main(int argc, char *argv[]) {
         // some process died
         DEBUG("detaching process");
         auto &session = client_sessions.at(pfd.fd);
-        (void) session;
         DEBUG("%d has died", session.pid);
         to_remove.push_back(pfd.fd);
       } else if (pfd.revents & POLLIN) {

@@ -56,7 +56,7 @@ void RunRadixSelectionImpl(
     int64_t* indices,
     CUDAContext* context) {
   const int block = std::min(
-      math::RoundUp(static_cast<int>(inner_size), kWarpSize),
+      math::roundUp(static_cast<int>(inner_size), kWarpSize),
       CAFFE_CUDA_NUM_THREADS);
   gatherTopK<T, kSelectMax, int64_t>
       <<<outer_size, block, 0, context->cuda_stream()>>>(
@@ -166,9 +166,9 @@ class TopKCudaOp : public Operator<Context> {
   int axis_;
 
   // Buffers for CUDAContext.
-  Tensor input_transposed_buffer_;
-  Tensor values_transposed_buffer_;
-  Tensor indices_transposed_buffer_;
+  Tensor input_transposed_buffer_{CUDA};
+  Tensor values_transposed_buffer_{CUDA};
+  Tensor indices_transposed_buffer_{CUDA};
 
   // Shape tensors on device for CUDAContext.
   Tensor input_dims_device_{CUDA};
@@ -187,7 +187,7 @@ bool TopKCudaOp<T, Context>::RunOnDevice() {
   auto* indices = Output(1);
   auto* flatten_indices = OutputSize() > 2 ? Output(2) : nullptr;
 
-  at::IntArrayRef input_dims = input.sizes();
+  at::IntList input_dims = input.dims();
   if (axis_ == -1) {
     axis_ = input_dims.size() - 1;
   }
@@ -207,13 +207,13 @@ bool TopKCudaOp<T, Context>::RunOnDevice() {
       input_dims.cend(),
       int64_t(1),
       std::multiplies<int64_t>());
-  const int64_t outer_size = input.numel() / input_dims[axis_];
+  const int64_t outer_size = input.size() / input_dims[axis_];
   const int64_t inner_size = input_dims[axis_];
 
   values->Resize(output_dims);
   indices->Resize(output_dims);
   if (flatten_indices != nullptr) {
-    flatten_indices->Resize(indices->numel());
+    flatten_indices->Resize(indices->size());
   }
   const T* input_data = input.template data<T>();
   T* values_data = values->template mutable_data<T>();
@@ -227,9 +227,10 @@ bool TopKCudaOp<T, Context>::RunOnDevice() {
                                      static_cast<int>(inner_size),
                                      static_cast<int>(next_size)};
     const std::array<int, 3> axes = {0, 2, 1};
-    ReinitializeTensor(&input_transposed_buffer_,  std::vector<int64_t>{outer_size, inner_size}, at::dtype<T>().device(CUDA));
-    ReinitializeTensor(&values_transposed_buffer_, std::vector<int64_t>{outer_size, k_}, at::dtype<T>().device(CUDA));
-    ReinitializeTensor(&indices_transposed_buffer_, std::vector<int64_t>{outer_size, k_}, at::dtype<int64_t>().device(CUDA));
+    input_transposed_buffer_.Resize(
+        std::vector<int64_t>{outer_size, inner_size});
+    values_transposed_buffer_.Resize(std::vector<int64_t>{outer_size, k_});
+    indices_transposed_buffer_.Resize(std::vector<int64_t>{outer_size, k_});
     math::Transpose(
         3,
         dims.data(),
@@ -243,12 +244,12 @@ bool TopKCudaOp<T, Context>::RunOnDevice() {
   }
 
   // init values as the default value
-  math::Set<T, CUDAContext>(values->numel(), T(0), values_data, &context_);
+  math::Set<T, CUDAContext>(values->size(), T(0), values_data, &context_);
   math::Set<int64_t, CUDAContext>(
-      indices->numel(), int64_t(-1), indices_data, &context_);
+      indices->size(), int64_t(-1), indices_data, &context_);
   if (flatten_indices_data != nullptr) {
     math::Set<int64_t, CUDAContext>(
-        flatten_indices->numel(), int64_t(-1), flatten_indices_data, &context_);
+        flatten_indices->size(), int64_t(-1), flatten_indices_data, &context_);
   }
 
   RunTopKOnLastDimCUDAImpl<T>(
@@ -282,12 +283,12 @@ bool TopKCudaOp<T, Context>::RunOnDevice() {
   // Flatten the indices if needed.
   if (flatten_indices != nullptr) {
     FlattenIndicesCUDAKernel<<<
-        CAFFE_GET_BLOCKS(indices->numel()),
+        CAFFE_GET_BLOCKS(indices->size()),
         CAFFE_CUDA_NUM_THREADS,
         0,
         context_.cuda_stream()>>>(
         indices->template data<int64_t>(),
-        indices->numel(),
+        indices->size(),
         next_size,
         inner_size,
         k_,
@@ -321,8 +322,8 @@ bool TopKGradientCudaOp<T, Context>::RunOnDevice() {
   const auto& indices = Input(1);
   const auto& original_input = Input(2);
   auto* output = Output(0);
-  at::IntArrayRef values_dims = values.sizes();
-  at::IntArrayRef origin_dims = original_input.sizes();
+  at::IntList values_dims = values.dims();
+  at::IntList origin_dims = original_input.dims();
   CAFFE_ENFORCE_EQ(values_dims.size(), origin_dims.size());
   output->Resize(origin_dims);
   T* output_data = output->template mutable_data<T>();

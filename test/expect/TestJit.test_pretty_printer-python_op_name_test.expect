@@ -1,2 +1,3 @@
-def python_op_name_test(y: Tensor) -> Tensor:
+def graph(self,
+    y: Tensor) -> Tensor:
   return ^python_fn()(y)

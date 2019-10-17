@@ -38,11 +38,12 @@ class DotGenerator {
       const typename GraphT::SubgraphType& sg,
       const std::vector<typename GraphT::SubgraphType*>& subgraphs) const {
     std::ostringstream output;
-    output << "digraph G {\nrankdir=LR\n";
+    output << "digraph G {\n\
+      ";
     for (const auto& node : sg.getNodes()) {
       generateNode(node, sg, output);
     }
-    for (size_t i = 0; i < subgraphs.size(); ++i) {
+    for (auto i = 0; i < subgraphs.size(); ++i) {
       const auto& subgraph = subgraphs[i];
       output << "subgraph cluster" << i << " {\n";
       output << "style=dotted;\n";
@@ -59,7 +60,8 @@ class DotGenerator {
   // Convert a subgraph to dot.
   std::string convert(const typename GraphT::SubgraphType& sg) const {
     std::ostringstream output;
-    output << "digraph G {\nrankdir=LR\n";
+    output << "digraph G {\n\
+      ";
     for (const auto& node : sg.getNodes()) {
       generateNode(node, sg, output);
     }
@@ -80,7 +82,7 @@ class DotGenerator {
    */
   std::string convertStruct(const typename GraphT::SubgraphType& sg) const {
     std::ostringstream output;
-    output << "digraph G {\nrankdir=LR\n";
+    output << "digraph G {\n";
 
     // Get input nodes (nodes w/o parents)
     std::unordered_map<typename GraphT::NodeRef, int>

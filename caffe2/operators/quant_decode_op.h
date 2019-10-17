@@ -102,9 +102,8 @@ template <QuantDecodeRunTy QuantDecodeRun>
 class QuantDecodeOp final : public Operator<CPUContext> {
  public:
   USE_OPERATOR_FUNCTIONS(CPUContext);
-  template <class... Args>
-  explicit QuantDecodeOp(Args&&... args)
-      : Operator<CPUContext>(std::forward<Args>(args)...) {}
+  QuantDecodeOp(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<CPUContext>(operator_def, ws) {}
 
   ~QuantDecodeOp() {}
 
@@ -139,9 +138,8 @@ class QuantDecodeOp final : public Operator<CPUContext> {
 class QuantDecodeGradientOp final : public Operator<CPUContext> {
  public:
   USE_OPERATOR_FUNCTIONS(CPUContext);
-  template <class... Args>
-  explicit QuantDecodeGradientOp(Args&&... args)
-      : Operator<CPUContext>(std::forward<Args>(args)...) {}
+  QuantDecodeGradientOp(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<CPUContext>(operator_def, ws) {}
   ~QuantDecodeGradientOp() {}
 
   bool RunOnDevice() override {

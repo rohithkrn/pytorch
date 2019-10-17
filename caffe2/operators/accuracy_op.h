@@ -10,11 +10,10 @@ template <typename T, class Context>
 class AccuracyOp final : public Operator<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
-  template <class... Args>
-  explicit AccuracyOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...),
+  AccuracyOp(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<Context>(operator_def, ws),
         top_k_(this->template GetSingleArgument<int>("top_k", 1)) {}
-
+        
   bool RunOnDevice() override;
 
  protected:

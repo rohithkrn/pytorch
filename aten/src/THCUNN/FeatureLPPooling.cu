@@ -5,7 +5,6 @@
 #include <THC/THCDeviceUtils.cuh>
 #include <THC/THCNumerics.cuh>
 #include <THC/THCTensorTypeUtils.cuh>
-#include <ATen/cuda/CUDAContext.h>
 
 #define OUTPUT_FEATURES_PER_THREAD 32
 #define MAX_WARPS_PER_RUN 4
@@ -398,7 +397,7 @@ runFeatureLPPoolingUpdateOutput(THCState* state,
   cudaStream_t stream =
     THCState_getCurrentStream(state);
   const cudaDeviceProp* deviceProperties =
-    at::cuda::getCurrentDeviceProperties();
+    THCState_getCurrentDeviceProperties(state);
 
   int outputFeatures = ((input.getSize(1) - width) / stride) + 1;
 
@@ -447,8 +446,7 @@ runFeatureLPPoolingUpdateOutput(THCState* state,
       L2_STRIDE_CASE(2, WIDTH);                 \
       L2_STRIDE_CASE(3, WIDTH);                 \
       L2_STRIDE_CASE(4, WIDTH);                 \
-    }                                           \
-    break;
+    }
 
 #define LP_STRIDE_CASE(STRIDE, WIDTH)                                   \
   case STRIDE:                                                          \
@@ -468,8 +466,7 @@ runFeatureLPPoolingUpdateOutput(THCState* state,
       LP_STRIDE_CASE(2, WIDTH);                 \
       LP_STRIDE_CASE(3, WIDTH);                 \
       LP_STRIDE_CASE(4, WIDTH);                 \
-    }                                           \
-    break;
+    }
 
   if (power == 2.0f) {
     switch (width) {
@@ -529,7 +526,7 @@ runFeatureLPPoolingUpdateGradInput(THCState* state,
   cudaStream_t stream =
     THCState_getCurrentStream(state);
   const cudaDeviceProp* deviceProperties =
-    at::cuda::getCurrentDeviceProperties();
+    THCState_getCurrentDeviceProperties(state);
 
   for (int i = 0; i < 4; ++i) {
     THAssert(gradOutput.getSize(i) == output.getSize(i));
@@ -585,8 +582,7 @@ runFeatureLPPoolingUpdateGradInput(THCState* state,
       L2_STRIDE_CASE(2, WIDTH);                 \
       L2_STRIDE_CASE(3, WIDTH);                 \
       L2_STRIDE_CASE(4, WIDTH);                 \
-    }                                           \
-    break;
+    }
 
 #define LP_STRIDE_CASE(STRIDE, WIDTH)                                   \
   case STRIDE:                                                          \
@@ -604,8 +600,7 @@ runFeatureLPPoolingUpdateGradInput(THCState* state,
       LP_STRIDE_CASE(2, WIDTH);                 \
       LP_STRIDE_CASE(3, WIDTH);                 \
       LP_STRIDE_CASE(4, WIDTH);                 \
-    }                                           \
-    break;
+    }
 
   if (power == 2.0f) {
     switch (width) {

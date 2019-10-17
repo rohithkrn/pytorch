@@ -11,11 +11,9 @@ namespace caffe2 {
 template <typename T, class Context>
 class RoIPoolOp final : public Operator<Context> {
  public:
-  template <class... Args>
-  explicit RoIPoolOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...),
-        is_test_(
-            this->template GetSingleArgument<int>(OpSchema::Arg_IsTest, 0)),
+  RoIPoolOp(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<Context>(operator_def, ws),
+        is_test_(this->template GetSingleArgument<int>(OpSchema::Arg_IsTest, 0)),
         order_(StringToStorageOrder(
             this->template GetSingleArgument<string>("order", "NCHW"))),
         pooled_height_(this->template GetSingleArgument<int>("pooled_h", 1)),
@@ -46,9 +44,8 @@ class RoIPoolOp final : public Operator<Context> {
 template <typename T, class Context>
 class RoIPoolGradientOp final : public Operator<Context> {
  public:
-  template <class... Args>
-  explicit RoIPoolGradientOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...),
+  RoIPoolGradientOp(const OperatorDef& def, Workspace* ws)
+      : Operator<Context>(def, ws),
         spatial_scale_(
             this->template GetSingleArgument<float>("spatial_scale", 1.)),
         pooled_height_(this->template GetSingleArgument<int>("pooled_h", 1)),

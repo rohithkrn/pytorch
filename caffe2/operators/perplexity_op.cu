@@ -20,11 +20,12 @@ struct perplexity_function
 template <>
 bool PerplexityOp<float, CUDAContext>::RunOnDevice() {
   auto& X = Input(0);
+  auto* Y = Output(0);
 
-  DCHECK_EQ(X.dim(), 1);
+  DCHECK_EQ(X.ndim(), 1);
   int N = X.dim32(0);
 
-  auto* Y = Output(0, vector<int64_t>(), at::dtype<float>());
+  Y->Resize(vector<int64_t>());
   float* Ydata = Y->template mutable_data<float>();
   const float* Xdata = X.data<float>();
 

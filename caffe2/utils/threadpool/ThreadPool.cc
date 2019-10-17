@@ -26,15 +26,15 @@ std::unique_ptr<ThreadPool> ThreadPool::defaultThreadPool() {
   int numThreads = cpuinfo_get_processors_count();
 
   bool applyCap = false;
-#if C10_ANDROID
+#if CAFFE2_ANDROID
   applyCap = FLAGS_caffe2_threadpool_android_cap;
-#elif C10_IOS
+#elif CAFFE2_IOS
   applyCap = FLAGS_caffe2_threadpool_ios_cap;
 #endif
 
   if (applyCap) {
     switch (numThreads) {
-#if C10_ANDROID && (CPUINFO_ARCH_ARM || CPUINFO_ARCH_ARM64)
+#if CAFFE2_ANDROID && (CPUINFO_ARCH_ARM || CPUINFO_ARCH_ARM64)
       case 4:
           switch (cpuinfo_get_core(0)->midr & UINT32_C(0xFF00FFF0)) {
             case UINT32_C(0x51002110): /* Snapdragon 820 Kryo Silver */
@@ -113,12 +113,12 @@ void ThreadPool::run(const std::function<void(int, size_t)>& fn, size_t range) {
 
   struct FnTask : public Task {
     FnTask(){};
-    ~FnTask() override{};
+    virtual ~FnTask(){};
     const std::function<void(int, size_t)> *fn_;
     int idx_;
     size_t start_;
     size_t end_;
-    void Run() override {
+    virtual void Run() override {
       for (auto i = start_; i < end_; ++i) {
         (*fn_)(idx_, i);
       }

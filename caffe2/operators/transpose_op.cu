@@ -1,6 +1,5 @@
-#include "caffe2/operators/transpose_op.h"
-
 #include "caffe2/core/context_gpu.h"
+#include "caffe2/operators/transpose_op.h"
 
 namespace caffe2 {
 

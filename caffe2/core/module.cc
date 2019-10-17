@@ -28,7 +28,8 @@ const CaffeMap<string, const ModuleSchema*>& CurrentModules() {
   return MutableCurrentModules();
 }
 
-ModuleSchema::ModuleSchema(const char* name, const char* description) {
+ModuleSchema::ModuleSchema(const char* name, const char* description)
+    : name_(name), description_(description) {
   std::lock_guard<std::mutex> guard(gModuleChangeMutex());
   MutableCurrentModules().emplace(name, this);
 }

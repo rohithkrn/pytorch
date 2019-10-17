@@ -1,18 +1,13 @@
 #!/bin/bash
 
-# shellcheck disable=SC2034
 COMPACT_JOB_NAME="short-perf-test-cpu"
-
-SCRIPT_PARENT_DIR=$(dirname "${BASH_SOURCE[0]}")
-
-# shellcheck source=.jenkins/pytorch/common.sh
-source "$SCRIPT_PARENT_DIR/common.sh"
+source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
 cd .jenkins/pytorch/perf_test
 
 echo "Running CPU perf test for PyTorch..."
 
-pip install -q awscli
+pip install awscli
 
 # Set multipart_threshold to be sufficiently high, so that `aws s3 cp` is not a multipart read
 # More info at https://github.com/aws/aws-cli/issues/2321

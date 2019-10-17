@@ -59,6 +59,7 @@ class AllreduceOp final : public Operator<Context> {
  protected:
   void initialize() {
     Mode mode = HALVING_DOUBLING;
+    auto bytes = Input(1).nbytes();
 
     // Store which inputs/outputs this instance initialized with
     update(init_);

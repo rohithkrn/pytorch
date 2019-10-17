@@ -10,18 +10,21 @@ namespace caffe2 {
 template <typename T, class Context>
 class AccumulateOp final : public Operator<Context> {
  public:
-  template <class... Args>
-  explicit AccumulateOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...),
+  AccumulateOp(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<Context>(operator_def, ws),
         gamma_(static_cast<T>(
             this->template GetSingleArgument<float>("gamma", 1.0))) {}
   USE_OPERATOR_CONTEXT_FUNCTIONS;
 
   bool RunOnDevice() override {
     auto& input = Input(0);
-
-    // TODO: the operator depends on output being set to 0 before the run
-    auto* output = Output(0, input.sizes(), at::dtype<T>());
+    auto* output = Output(0);
+    if (output->sizes() != input.sizes()) {
+      LOG(INFO) << "Reshaping and initializing output.";
+      output->ResizeLike(input);
+      math::Set<T, Context>(
+          output->numel(), 0, output->template mutable_data<T>(), &context_);
+    }
     math::Axpby<T, T, Context>(
         input.numel(),
         static_cast<T>(1),

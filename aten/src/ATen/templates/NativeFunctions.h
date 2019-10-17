@@ -4,9 +4,8 @@
 
 #include <ATen/Context.h>
 #include <c10/core/ScalarType.h>
+#include <ATen/core/TensorMethods.h>
 #include <c10/core/TensorOptions.h>
-#include <ATen/core/Reduction.h>
-#include <ATen/core/EnableNamedTensor.h>
 
 #include <array>
 #include <functional>
@@ -26,8 +25,25 @@ struct Type;
 namespace at {
 namespace native {
 
+inline Tensor from_blob(
+    void* data,
+    IntList sizes,
+    const std::function<void(void*)>& deleter,
+    const TensorOptions& options = {}) {
+  return at::getType(options).tensorFromBlob(data, sizes, deleter);
+}
+
+inline Tensor from_blob(
+    void* data,
+    IntList sizes,
+    IntList strides,
+    const std::function<void(void*)>& deleter,
+    const TensorOptions& options = {}) {
+  return at::getType(options).tensorFromBlob(data, sizes, strides, deleter);
+}
+
 // These functions are defined in native/TensorFactories.cpp.
-#define TENSOR(T, S)                                                          \
+#define TENSOR(T, S, _1)                                                      \
   CAFFE2_API Tensor tensor(ArrayRef<T> values, const TensorOptions& options); \
   inline Tensor tensor(                                                       \
       std::initializer_list<T> values, const TensorOptions& options) {        \
@@ -45,7 +61,7 @@ namespace native {
   inline Tensor tensor(T value) {                                             \
     return native::tensor(ArrayRef<T>(value));                                \
   }
-AT_FORALL_SCALAR_TYPES_AND3(Bool, Half, BFloat16, TENSOR)
+AT_FORALL_SCALAR_TYPES_EXCEPT_HALF(TENSOR)
 #undef TENSOR
 
 ${native_function_declarations}

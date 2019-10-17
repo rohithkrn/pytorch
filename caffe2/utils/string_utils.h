@@ -9,8 +9,7 @@
 
 namespace caffe2 {
 
-CAFFE2_API std::vector<std::string>
-split(char separator, const std::string& string, bool ignore_empty = false);
+CAFFE2_API std::vector<std::string> split(char separator, const std::string& string);
 
 CAFFE2_API std::string trim(const std::string& str);
 
@@ -20,18 +19,6 @@ CAFFE2_API size_t editDistance(
 CAFFE2_API inline bool StartsWith(const std::string& str, const std::string& prefix) {
   return std::mismatch(prefix.begin(), prefix.end(), str.begin()).first ==
       prefix.end();
-}
-
-CAFFE2_API inline bool EndsWith(
-    const std::string& full,
-    const std::string& ending) {
-  if (full.length() >= ending.length()) {
-    return (
-        0 ==
-        full.compare(full.length() - ending.length(), ending.length(), ending));
-  } else {
-    return false;
-  }
 }
 
 CAFFE2_API int32_t editDistanceHelper(const char* s1,

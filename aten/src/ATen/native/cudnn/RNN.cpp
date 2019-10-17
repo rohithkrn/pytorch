@@ -32,7 +32,7 @@ std::tuple<Tensor, Tensor, Tensor, Tensor, Tensor> _cudnn_rnn(
     const Tensor& weight_buf_r, const Tensor& hx, const Tensor& cx,
     int64_t fn_mode, int64_t fn_hidden_size,
     int64_t fn_num_layers, bool batch_first, double fn_dropout,
-    bool fn_train, bool fn_bidirectional, IntArrayRef fn_batch_sizes,
+    bool fn_train, bool fn_bidirectional, IntList fn_batch_sizes,
     const Tensor& fn_dropout_state
     ) {
   AT_ERROR("_cudnn_rnn: ATen not compiled with cuDNN support");
@@ -44,7 +44,7 @@ std::tuple<Tensor, Tensor, Tensor, std::vector<Tensor>> _cudnn_rnn_backward(
     const Tensor& grad_cy_r,
     int64_t mode, int64_t hidden_size,
     int64_t num_layers, bool batch_first, double dropout,
-    bool train, bool bidirectional, IntArrayRef batch_sizes,
+    bool train, bool bidirectional, IntList batch_sizes,
     const Tensor& dropout_state, const Tensor& reserve,
     std::array<bool, 4> output_mask
     ) {
@@ -99,7 +99,6 @@ namespace {
     cudnnDirectionMode_t bidirectional;
     cudnnRNNMode_t mode;
     cudnnDataType_t datatype;
-    cudnnDataType_t input_datatype;
     cudnnRNNAlgo_t algo = CUDNN_RNN_ALGO_STANDARD;
     cudnnRNNInputMode_t input_mode = CUDNN_LINEAR_INPUT;
 
@@ -138,19 +137,18 @@ namespace {
       this->algo = algo;
     }
 
-    void set(int64_t mode, int64_t hidden_size, int64_t num_layers, bool bidirectional, cudnnDataType_t datatype, cudnnDataType_t input_datatype) {
+    void set(int64_t mode, int64_t hidden_size, int64_t num_layers, bool bidirectional, cudnnDataType_t datatype) {
       this->set_mode(mode);
       this->hidden_size = hidden_size;
       this->num_layers = num_layers;
       this->set_bidirectional(bidirectional);
       this->datatype = datatype;
-      this->input_datatype = input_datatype;
     }
 
 
     RNNDescriptor descriptor(cudnnHandle_t handle, DropoutDescriptor&& dropout_desc) const {
       RNNDescriptor rnn_desc;
-      rnn_desc.set(handle, hidden_size, num_layers, std::move(dropout_desc), input_mode, bidirectional, mode, datatype, input_datatype, algo);
+      rnn_desc.set(handle, hidden_size, num_layers, std::move(dropout_desc), input_mode, bidirectional, mode, datatype, algo);
       return rnn_desc;
     }
 
@@ -171,7 +169,7 @@ namespace {
 
   // TensorDescriptor list
 
-  std::vector<TensorDescriptor> rnn_descriptor_sequence(const Tensor& tensor, IntArrayRef batch_sizes) {
+  std::vector<TensorDescriptor> rnn_descriptor_sequence(const Tensor& tensor, IntList batch_sizes) {
     std::vector<TensorDescriptor> descriptors(batch_sizes.size());
     size_t i = 0;
     // To be mutated in the loop
@@ -255,10 +253,10 @@ namespace {
   //    input.size() = mini_batch x seq_length x input_size
   //
   struct TensorDescriptorListParams {
-    IntArrayRef batch_sizes;
+    IntList batch_sizes;
     int64_t seq_length;
     int64_t mini_batch;
-    // NB: this is not input.size(), which is an IntArrayRef; instead, this
+    // NB: this is not input.size(), which is an IntList; instead, this
     // size of the inner-most dimension.  In NL applications, this is usually
     // the size of the embedding.  You can also think of this as the size
     // of the "channel" dimension (at risk of confusing vision researchers :)
@@ -270,7 +268,7 @@ namespace {
       return batch_sizes.size() != 0;
     }
 
-    void set(IntArrayRef input_sizes, IntArrayRef batch_sizes_, bool batch_first) {
+    void set(IntList input_sizes, IntList batch_sizes_, bool batch_first) {
       batch_sizes = batch_sizes_;
       if (is_input_packed()) {
         seq_length = batch_sizes.size();
@@ -377,7 +375,7 @@ namespace {
       case CUDNN_RNN_TANH:
         return 2;
       default:
-        AT_ERROR("unknown cuDNN RNN mode ", mode);
+        AT_ERROR("unknown cuDNN RNN mode %d", mode);
     }
   }
 
@@ -445,12 +443,12 @@ namespace {
                 &data_type,
                 &format,
                 &nb_dims,
-                filter_dim_a.data_ptr<int>()
+                filter_dim_a.data<int>()
                 ));
 
           AT_ASSERTM(nb_dims <= min_dim, "nb_dims = ", nb_dims, "; min_dim  = ", min_dim);
           filter_dim_a = filter_dim_a.slice(0, 0, nb_dims);
-          auto elem_size = dataSize(getCudnnDataType(weight_buf));
+          auto elem_size = dataSize(rnn.datatype);
           auto offset_bytes = (char*)matrix_pointer - (char*)weight_buf.data_ptr();
           AT_ASSERTM(offset_bytes % elem_size == 0, "offset_bytes = ", offset_bytes, "; elem_size = ", elem_size);
           size_t offset = offset_bytes / elem_size;
@@ -460,7 +458,7 @@ namespace {
           // (same for the hh weights, and the ih and hh biases).
           // Since we're storing all the weights in a single tensor anyway,
           // might as well merge the CUDNN ones into a single tensor as well
-          int mat_numel = *filter_dim_a.prod(at::ScalarType::Int).data_ptr<int>();
+          int mat_numel = *filter_dim_a.prod(at::ScalarType::Int).data<int>();
           if (linear_id == 0 || linear_id == num_linear_layers / 2) {
             std::initializer_list<int64_t> size = {
               mat_numel * num_linear_layers / 2, 1};
@@ -577,14 +575,14 @@ namespace {
     }
   }
 
-  cudnnRNNAlgo_t get_algo(const RNNDescriptorParams& rnn, const TensorDescriptorListParams& tensors, const Tensor input){
+  cudnnRNNAlgo_t get_algo(const RNNDescriptorParams& rnn, const TensorDescriptorListParams& tensors){
 #if CUDNN_VERSION < 7200 || CUDA_VERSION < 9010
       return CUDNN_RNN_ALGO_STANDARD;
 #else
       cudaDeviceProp* prop = at::cuda::getCurrentDeviceProperties();
       const int64_t bsize = tensors.mini_batch;
       //excluding Turing from using persistent rnn.
-      if (prop->major == 7 && prop->minor != 5 && getCudnnDataType(input) == CUDNN_DATA_HALF && !tensors.is_input_packed()) {
+      if (prop->major == 7 && prop->minor != 5 && rnn.datatype == CUDNN_DATA_HALF && !tensors.is_input_packed()) {
           if (rnn.num_layers == 1 && rnn.hidden_size <= 1024 && rnn.num_directions() == 1 &&
                   rnn.hidden_size % 128 == 0 && tensors.input_size % 128 == 0){
               //technically, batch size should be multiple of 8, but there are quite a few multiple-of-8 batchsizes that give bad perf,
@@ -602,17 +600,6 @@ namespace {
 #endif
   }
 
-  cudnnDataType_t promote_rnn_math_type(cudnnDataType_t dtype) {
-#if CUDNN_VERSION != 7103
-// CUDNN 7.1.3 enforces RNN descriptor type to be identical to input/weight. This check throws an error for type
-// promotion. The check has since been removed.
-    if (dtype == CUDNN_DATA_HALF) {
-      return CUDNN_DATA_FLOAT;
-    }
-#endif
-    return dtype;
-  }
-
 } // anonymous namespace
 
 // NB: does inplace update into TensorList
@@ -627,14 +614,13 @@ Tensor _cudnn_rnn_flatten_weight(
     bool fn_bidirectional
     ) {
 
-  TORCH_CHECK(weight_arr.size() > 0,
+  AT_CHECK(weight_arr.size() > 0,
            "_cudnn_rnn_flatten_weight_: cannot flatten empty weight list");
 
   auto any_param = weight_arr[0];
-  auto datatype = getCudnnDataType(any_param);
 
   RNNDescriptorParams rnn;
-  rnn.set(fn_mode, fn_hidden_size, fn_num_layers, fn_bidirectional, promote_rnn_math_type(datatype), datatype);
+  rnn.set(fn_mode, fn_hidden_size, fn_num_layers, fn_bidirectional, getCudnnDataType(any_param));
 
   auto handle = getCudnnHandle();
   RNNDescriptor rnn_desc = rnn.descriptor(handle);
@@ -643,7 +629,7 @@ Tensor _cudnn_rnn_flatten_weight(
   TensorDescriptor x_desc;
   x_desc.set(getCudnnDataType(any_param), x_geom.sizes(), x_geom.strides(), 5);
 
-  auto num_weights = get_num_weights(handle, rnn_desc, x_desc, datatype);
+  auto num_weights = get_num_weights(handle, rnn_desc, x_desc, rnn.datatype);
   auto weight_buf = at::zeros(num_weights, any_param.options());
 
   FilterDescriptor w_desc;
@@ -680,7 +666,7 @@ std::tuple<Tensor, Tensor, Tensor, Tensor, Tensor> _cudnn_rnn(
     const Tensor& weight_buf_r, const Tensor& hx, const Tensor& cx,
     int64_t fn_mode, int64_t fn_hidden_size,
     int64_t fn_num_layers, bool batch_first, double fn_dropout,
-    bool fn_train, bool fn_bidirectional, IntArrayRef fn_batch_sizes,
+    bool fn_train, bool fn_bidirectional, IntList fn_batch_sizes,
     const Tensor& fn_dropout_state
     ) {
 
@@ -693,15 +679,14 @@ std::tuple<Tensor, Tensor, Tensor, Tensor, Tensor> _cudnn_rnn(
       checkSameGPU("cudnn_rnn", input_arg, dropout_state_arg);
   }
   RNNParams fn;
-  auto datatype = getCudnnDataType(input);
-  fn.rnn.set(fn_mode, fn_hidden_size, fn_num_layers, fn_bidirectional, promote_rnn_math_type(datatype), datatype);
+  fn.rnn.set(fn_mode, fn_hidden_size, fn_num_layers, fn_bidirectional, getCudnnDataType(input));
   fn.dropout.set(fn_train, fn_dropout, fn_dropout_state);
   fn.tensors.set(input.sizes(), fn_batch_sizes, batch_first);
 
   // TODO: Set device to input
 
   if (fn.rnn.mode != CUDNN_LSTM) {
-    TORCH_CHECK(!cx.defined(),
+    AT_CHECK(!cx.defined(),
              "rnn: illegal defined cx for non-LSTM RNN");
   }
 
@@ -714,9 +699,9 @@ std::tuple<Tensor, Tensor, Tensor, Tensor, Tensor> _cudnn_rnn(
   auto hidden_size = _hidden_size(fn.rnn, fn.tensors);
   auto output_size = _output_size(fn.rnn, fn.tensors);
 
-  TORCH_CHECK(hx.is_contiguous(),
+  AT_CHECK(hx.is_contiguous(),
            "rnn: hx is not contiguous");
-  TORCH_CHECK(!cx.defined() || cx.is_contiguous(),
+  AT_CHECK(!cx.defined() || cx.is_contiguous(),
            "rnn: cx is not contiguous");
 
   auto x = input.contiguous();
@@ -731,13 +716,13 @@ std::tuple<Tensor, Tensor, Tensor, Tensor, Tensor> _cudnn_rnn(
   auto y = output;
 
   auto handle = getCudnnHandle();
-  cudnnRNNAlgo_t algo = get_algo(fn.rnn, fn.tensors, input);
+  cudnnRNNAlgo_t algo = get_algo(fn.rnn, fn.tensors);
   fn.rnn.set_algo(algo);
   RNNDescriptors descs(fn, handle, x, y, hx, cx);
 
   FilterDescriptor w_desc;
   if (!weight_buf.defined()) {
-    auto num_weights = get_num_weights(handle, descs.rnn_desc, descs.x_descs[0], datatype);
+    auto num_weights = get_num_weights(handle, descs.rnn_desc, descs.x_descs[0], fn.rnn.datatype);
     weight_buf = at::empty(num_weights, x.options());
     w_desc.set(weight_buf, 3);
     weight_buf.zero_();
@@ -750,8 +735,8 @@ std::tuple<Tensor, Tensor, Tensor, Tensor, Tensor> _cudnn_rnn(
     w_desc.set(weight_buf, 3);
   }
 
-  TORCH_CHECK(!cx.defined() || cx.sizes().equals(hidden_size),
-           "Expected cell size ", IntArrayRef{hidden_size}, ", got ", cx.sizes());
+  AT_CHECK(!cx.defined() || cx.sizes().equals(hidden_size),
+           "Expected cell size ", IntList{hidden_size}, ", got ", cx.sizes());
 
   size_t workspace_size;
   auto x_descs_arr = descs.get_x_descs();
@@ -778,7 +763,6 @@ std::tuple<Tensor, Tensor, Tensor, Tensor, Tensor> _cudnn_rnn(
           &reserve_size
           ));
     reserve = at::empty(reserve_size, input.options().dtype(kByte));
-    setCuDNNStreamToCurrent();
     AT_CUDNN_CHECK(cudnnRNNForwardTraining(
           handle,
           descs.rnn_desc.desc(),
@@ -795,7 +779,6 @@ std::tuple<Tensor, Tensor, Tensor, Tensor, Tensor> _cudnn_rnn(
           ));
   } else { // inference
     reserve = at::empty({0}, input.options().dtype(kByte));
-    setCuDNNStreamToCurrent();
     AT_CUDNN_CHECK(cudnnRNNForwardInference(
           handle,
           descs.rnn_desc.desc(),
@@ -825,7 +808,7 @@ std::tuple<Tensor, Tensor, Tensor> _cudnn_rnn_backward_input(
     const Tensor& grad_cy,
     int64_t fn_mode, int64_t fn_hidden_size,
     int64_t fn_num_layers, bool batch_first, double fn_dropout,
-    bool fn_train, bool fn_bidirectional, IntArrayRef fn_batch_sizes,
+    bool fn_train, bool fn_bidirectional, IntList fn_batch_sizes,
     const Tensor& fn_dropout_state, const Tensor& fn_reserve,
     std::array<bool, 3> output_mask
     ) {
@@ -835,8 +818,7 @@ std::tuple<Tensor, Tensor, Tensor> _cudnn_rnn_backward_input(
   auto output = output_r;
 
   RNNParams fn;
-  auto datatype = getCudnnDataType(input);
-  fn.rnn.set(fn_mode, fn_hidden_size, fn_num_layers, fn_bidirectional, promote_rnn_math_type(datatype), datatype);
+  fn.rnn.set(fn_mode, fn_hidden_size, fn_num_layers, fn_bidirectional, getCudnnDataType(input));
   fn.dropout.set(fn_train, fn_dropout, fn_dropout_state);
   fn.tensors.set(input.sizes(), fn_batch_sizes, batch_first);
 
@@ -844,7 +826,7 @@ std::tuple<Tensor, Tensor, Tensor> _cudnn_rnn_backward_input(
   auto handle = getCudnnHandle();
 
   if (fn.rnn.mode != CUDNN_LSTM) {
-    TORCH_CHECK(!cx.defined(),
+    AT_CHECK(!cx.defined(),
              "rnn: illegal defined cx for non-LSTM RNN");
   }
 
@@ -859,9 +841,9 @@ std::tuple<Tensor, Tensor, Tensor> _cudnn_rnn_backward_input(
   auto hidden_size = _hidden_size(fn.rnn, fn.tensors);
   auto output_size = _output_size(fn.rnn, fn.tensors);
 
-  TORCH_CHECK(hx.is_contiguous(),
+  AT_CHECK(hx.is_contiguous(),
            "rnn: hx is not contiguous");
-  TORCH_CHECK(!cx.defined() || cx.is_contiguous(),
+  AT_CHECK(!cx.defined() || cx.is_contiguous(),
            "rnn: cx is not contiguous");
 
   auto x = input.contiguous();
@@ -875,27 +857,27 @@ std::tuple<Tensor, Tensor, Tensor> _cudnn_rnn_backward_input(
   AT_ASSERTM(cx.defined() || !output_mask[2], "illegally required grad of cx for non-LSTM RNN");
   auto dcx = cx.defined() ? at::empty(hidden_size, cx.options()) : Tensor();
 
-  TORCH_CHECK(fn_train,
+  AT_CHECK(fn_train,
            "cudnn RNN backward can only be called in training mode");
 
-  TORCH_CHECK(input.sizes().equals(input_size),
-           "Expected input size ", IntArrayRef{input_size}, ", got ", input.sizes());
-  TORCH_CHECK(output.sizes().equals(output_size),
-           "Expected output size ", IntArrayRef{output_size}, ", got ", output.sizes());
+  AT_CHECK(input.sizes().equals(input_size),
+           "Expected input size ", IntList{input_size}, ", got ", input.sizes());
+  AT_CHECK(output.sizes().equals(output_size),
+           "Expected output size ", IntList{output_size}, ", got ", output.sizes());
 
-  TORCH_CHECK(!hx.defined() || hx.sizes().equals(hidden_size),
-           "Expected hidden size ", IntArrayRef{hidden_size}, ", got ", hx.sizes());
-  TORCH_CHECK(!cx.defined() || cx.sizes().equals(hidden_size),
-           "Expected cell size ", IntArrayRef{hidden_size}, ", got ", cx.sizes());
-  TORCH_CHECK(!dhy.defined() || dhy.sizes().equals(hidden_size),
-           "Expected d_hidden size ", IntArrayRef{hidden_size}, ", got ", dhy.sizes());
-  TORCH_CHECK(!dcy.defined() || dcy.sizes().equals(hidden_size),
-           "Expected d_cell size ", IntArrayRef{hidden_size}, ", got ", dcy.sizes());
+  AT_CHECK(!hx.defined() || hx.sizes().equals(hidden_size),
+           "Expected hidden size ", IntList{hidden_size}, ", got ", hx.sizes());
+  AT_CHECK(!cx.defined() || cx.sizes().equals(hidden_size),
+           "Expected cell size ", IntList{hidden_size}, ", got ", cx.sizes());
+  AT_CHECK(!dhy.defined() || dhy.sizes().equals(hidden_size),
+           "Expected d_hidden size ", IntList{hidden_size}, ", got ", dhy.sizes());
+  AT_CHECK(!dcy.defined() || dcy.sizes().equals(hidden_size),
+           "Expected d_cell size ", IntList{hidden_size}, ", got ", dcy.sizes());
 
-  TORCH_CHECK(dhy.is_cuda() && dy.is_cuda() && (!dcy.defined() || dcy.is_cuda()),
+  AT_CHECK(dhy.is_cuda() && dy.is_cuda() && (!dcy.defined() || dcy.is_cuda()),
            "Gradients aren't CUDA tensors");
 
-  cudnnRNNAlgo_t algo = get_algo(fn.rnn, fn.tensors, input);
+  cudnnRNNAlgo_t algo = get_algo(fn.rnn, fn.tensors);
   fn.rnn.set_algo(algo);
   RNNDescriptors descs(fn, handle, x, y, hx, cx);
 
@@ -914,7 +896,7 @@ std::tuple<Tensor, Tensor, Tensor> _cudnn_rnn_backward_input(
         ));
   // TODO: put this in the correct device???
   Tensor workspace = at::empty(workspace_size, input.options().dtype(kByte));
-  setCuDNNStreamToCurrent();
+
   AT_CUDNN_CHECK(cudnnRNNBackwardData(
         handle,
         descs.rnn_desc.desc(),
@@ -949,7 +931,7 @@ std::vector<Tensor> _cudnn_rnn_backward_weight(
     const Tensor& output_r,
     int64_t fn_mode, int64_t fn_hidden_size,
     int64_t fn_num_layers, bool batch_first, double fn_dropout,
-    bool fn_train, bool fn_bidirectional, IntArrayRef fn_batch_sizes,
+    bool fn_train, bool fn_bidirectional, IntList fn_batch_sizes,
     const Tensor& fn_dropout_state, const Tensor& fn_reserve
     ) {
 
@@ -959,15 +941,14 @@ std::vector<Tensor> _cudnn_rnn_backward_weight(
   auto output = output_r;
 
   RNNParams fn;
-  auto datatype = getCudnnDataType(input);
-  fn.rnn.set(fn_mode, fn_hidden_size, fn_num_layers, fn_bidirectional, promote_rnn_math_type(datatype), datatype);
+  fn.rnn.set(fn_mode, fn_hidden_size, fn_num_layers, fn_bidirectional, getCudnnDataType(input));
   fn.dropout.set(fn_train, fn_dropout, fn_dropout_state);
   fn.tensors.set(input.sizes(), fn_batch_sizes, batch_first);
 
   auto handle = getCudnnHandle();
 
   if (fn.rnn.mode != CUDNN_LSTM) {
-    TORCH_CHECK(!cx.defined(),
+    AT_CHECK(!cx.defined(),
              "rnn: illegal defined cx for non-LSTM RNN");
   }
 
@@ -980,27 +961,27 @@ std::vector<Tensor> _cudnn_rnn_backward_weight(
   auto input_size = _input_size(fn.tensors);
   auto hidden_size = _hidden_size(fn.rnn, fn.tensors);
 
-  TORCH_CHECK(fn_train,
+  AT_CHECK(fn_train,
            "cudnn RNN backward can only be called in training mode");
 
-  TORCH_CHECK(input.sizes().equals(input_size),
-           "Expected input size ", IntArrayRef{input_size}, ", got ", input.sizes());
-  TORCH_CHECK(!hx.defined() || hx.sizes().equals(hidden_size),
-           "Expected hidden size ", IntArrayRef{hidden_size}, ", got ", hx.sizes());
+  AT_CHECK(input.sizes().equals(input_size),
+           "Expected input size ", IntList{input_size}, ", got ", input.sizes());
+  AT_CHECK(!hx.defined() || hx.sizes().equals(hidden_size),
+           "Expected hidden size ", IntList{hidden_size}, ", got ", hx.sizes());
 
   // TODO: the above were the only checks in rnn.py, but it doesn't seem
   // like these checks are enough
 
-  TORCH_CHECK(hx.is_contiguous(),
+  AT_CHECK(hx.is_contiguous(),
            "rnn: hx is not contiguous");
-  TORCH_CHECK(!cx.defined() || cx.is_contiguous(),
+  AT_CHECK(!cx.defined() || cx.is_contiguous(),
            "rnn: cx is not contiguous");
 
   auto x = input.contiguous();
   const auto& y = output;
   auto dw = at::zeros(weight_buf.sizes(), weight_buf.options());
 
-  cudnnRNNAlgo_t algo = get_algo(fn.rnn, fn.tensors, input);
+  cudnnRNNAlgo_t algo = get_algo(fn.rnn, fn.tensors);
   fn.rnn.set_algo(algo);
   RNNDescriptors descs(fn, handle, x, y, hx, cx);
 
@@ -1018,7 +999,7 @@ std::vector<Tensor> _cudnn_rnn_backward_weight(
         &workspace_size
         ));
   Tensor workspace = at::empty(workspace_size, input.options().dtype(kByte));
-  setCuDNNStreamToCurrent();
+
   AT_CUDNN_CHECK(cudnnRNNBackwardWeights(
         handle,
         descs.rnn_desc.desc(),
@@ -1059,7 +1040,7 @@ std::tuple<Tensor, Tensor, Tensor, std::vector<Tensor>> _cudnn_rnn_backward(
     const Tensor& grad_cy_r,
     int64_t mode, int64_t hidden_size,
     int64_t num_layers, bool batch_first, double dropout,
-    bool train, bool bidirectional, IntArrayRef batch_sizes,
+    bool train, bool bidirectional, IntList batch_sizes,
     const Tensor& dropout_state, const Tensor& reserve,
     std::array<bool, 4> output_mask
     ) {
@@ -1181,7 +1162,7 @@ Tensor try_get_weight_buf(
   auto datatype = getCudnnDataType(input);
 
   RNNDescriptorParams rnn;
-  rnn.set(mode, hidden_size, num_layers, bidirectional, promote_rnn_math_type(datatype), datatype);
+  rnn.set(mode, hidden_size, num_layers, bidirectional, datatype);
   RNNDescriptor rnn_desc = rnn.descriptor(handle);
 
   TensorGeometry x_geom ({1, input.size(-1)});
@@ -1238,8 +1219,8 @@ std::pair<Tensor, hidden_type> _cudnn_impl(
     AT_WARN(WEIGHT_FORMAT_WARN);
   }
 
-  TORCH_CHECK(_batch_sizes.dim() == 1, "batch_sizes tensor should be 1D");
-  IntArrayRef batch_sizes { _batch_sizes.data_ptr<int64_t>(), static_cast<size_t>(_batch_sizes.size(0)) };
+  AT_CHECK(_batch_sizes.dim() == 1, "batch_sizes tensor should be 1D");
+  IntList batch_sizes { _batch_sizes.data<int64_t>(), static_cast<size_t>(_batch_sizes.size(0)) };
 
   auto & dropout_state = get_dropout_state(dropout_p, train, input.options());
   std::unique_lock<DropoutState> lock { dropout_state };

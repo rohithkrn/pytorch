@@ -55,10 +55,10 @@ PyObject* THPFInfo_pynew(PyTypeObject* type, PyObject* args, PyObject* kwargs) {
 
   torch::ParsedArgs<1> parsed_args;
   auto r = parser.parse(args, kwargs, parsed_args);
-  TORCH_CHECK(r.idx < 2, "Not a type");
+  AT_CHECK(r.idx < 2, "Not a type");
   at::ScalarType scalar_type;
   if (r.idx == 1) {
-    scalar_type = torch::tensors::get_default_scalar_type();
+    scalar_type = torch::tensors::get_default_tensor_type().scalarType();
     // The default tensor type can only be set to a floating point type/
     AT_ASSERT(at::isFloatingType(scalar_type));
   } else {
@@ -81,15 +81,10 @@ PyObject* THPIInfo_pynew(PyTypeObject* type, PyObject* args, PyObject* kwargs) {
   });
   torch::ParsedArgs<1> parsed_args;
   auto r = parser.parse(args, kwargs, parsed_args);
-  TORCH_CHECK(r.idx == 0, "Not a type");
+  AT_CHECK(r.idx == 0, "Not a type");
 
   at::ScalarType scalar_type = r.scalartype(0);
-  if (scalar_type == at::ScalarType::Bool) {
-    return PyErr_Format(
-        PyExc_TypeError,
-        "torch.bool is not supported by torch.iinfo");
-  }
-  if (!at::isIntegralType(scalar_type, /*includeBool=*/false) && !at::isQIntType(scalar_type)) {
+  if (!at::isIntegralType(scalar_type)) {
     return PyErr_Format(
         PyExc_TypeError,
         "torch.iinfo() requires an integer input type. Use torch.finfo to handle '%s'",
@@ -124,7 +119,7 @@ static PyObject* THPDTypeInfo_bits(THPDTypeInfo* self, void*) {
 
 static PyObject* THPFInfo_eps(THPFInfo* self, void*) {
   return AT_DISPATCH_FLOATING_AND_COMPLEX_TYPES(
-      self->type, "epsilon", [] {
+      at::CPU(self->type), "epsilon", [] {
         return PyFloat_FromDouble(
             std::numeric_limits<
                 at::scalar_value_type<scalar_t>::type>::epsilon());
@@ -132,45 +127,20 @@ static PyObject* THPFInfo_eps(THPFInfo* self, void*) {
 }
 
 static PyObject* THPFInfo_max(THPFInfo* self, void*) {
-  return AT_DISPATCH_FLOATING_AND_COMPLEX_TYPES(self->type, "max", [] {
+  return AT_DISPATCH_FLOATING_AND_COMPLEX_TYPES(at::CPU(self->type), "max", [] {
     return PyFloat_FromDouble(
         std::numeric_limits<at::scalar_value_type<scalar_t>::type>::max());
   });
 }
 
-static PyObject* THPFInfo_min(THPFInfo* self, void*) {
-  return AT_DISPATCH_FLOATING_AND_COMPLEX_TYPES(self->type, "min", [] {
-    return PyFloat_FromDouble(
-        std::numeric_limits<at::scalar_value_type<scalar_t>::type>::lowest());
-  });
-}
-
 static PyObject* THPIInfo_max(THPFInfo* self, void*) {
-  if (at::isIntegralType(self->type, /*includeBool=*/false)) {
-    return AT_DISPATCH_INTEGRAL_TYPES(self->type, "max", [] {
-      return THPUtils_packInt64(std::numeric_limits<scalar_t>::max());
-    });
-  }
-  // Quantized Type
-  return AT_DISPATCH_QINT_TYPES(self->type, "max", [] {
-      return THPUtils_packInt64(std::numeric_limits<underlying_t>::max());
-  });
-}
-
-static PyObject* THPIInfo_min(THPFInfo* self, void*) {
-  if (at::isIntegralType(self->type, /*includeBool=*/false)) {
-    return AT_DISPATCH_INTEGRAL_TYPES(self->type, "min", [] {
-      return THPUtils_packInt64(std::numeric_limits<scalar_t>::lowest());
-    });
-  }
-  // Quantized Type
-  return AT_DISPATCH_QINT_TYPES(self->type, "min", [] {
-      return THPUtils_packInt64(std::numeric_limits<underlying_t>::lowest());
+  return AT_DISPATCH_INTEGRAL_TYPES(at::CPU(self->type), "max", [] {
+    return THPUtils_packInt64(std::numeric_limits<scalar_t>::max());
   });
 }
 
 static PyObject* THPFInfo_tiny(THPFInfo* self, void*) {
-  return AT_DISPATCH_FLOATING_AND_COMPLEX_TYPES(self->type, "min", [] {
+  return AT_DISPATCH_FLOATING_AND_COMPLEX_TYPES(at::CPU(self->type), "min", [] {
     return PyFloat_FromDouble(
         std::numeric_limits<at::scalar_value_type<scalar_t>::type>::min());
   });
@@ -180,7 +150,6 @@ static struct PyGetSetDef THPFInfo_properties[] = {
     {"bits", (getter)THPDTypeInfo_bits, nullptr, nullptr, nullptr},
     {"eps", (getter)THPFInfo_eps, nullptr, nullptr, nullptr},
     {"max", (getter)THPFInfo_max, nullptr, nullptr, nullptr},
-    {"min", (getter)THPFInfo_min, nullptr, nullptr, nullptr},
     {"tiny", (getter)THPFInfo_tiny, nullptr, nullptr, nullptr},
     {nullptr}};
 
@@ -231,7 +200,6 @@ PyTypeObject THPFInfoType = {
 static struct PyGetSetDef THPIInfo_properties[] = {
     {"bits", (getter)THPDTypeInfo_bits, nullptr, nullptr, nullptr},
     {"max", (getter)THPIInfo_max, nullptr, nullptr, nullptr},
-    {"min", (getter)THPIInfo_min, nullptr, nullptr, nullptr},
     {nullptr}};
 
 static PyMethodDef THPIInfo_methods[] = {

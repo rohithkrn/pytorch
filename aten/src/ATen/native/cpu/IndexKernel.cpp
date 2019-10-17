@@ -14,7 +14,7 @@ using namespace vec256;
 
 struct Indexer {
   Indexer(int64_t num_indexers, char** indexers, const int64_t* indexer_strides,
-          IntArrayRef original_sizes, IntArrayRef original_strides)
+          IntList original_sizes, IntList original_strides)
     : num_indexers(num_indexers)
     , indexers(indexers)
     , indexer_strides(indexer_strides)
@@ -36,7 +36,7 @@ struct Indexer {
       int64_t value = *(int64_t*)&indexers[j][idx * indexer_strides[j]];
       int64_t size = original_sizes[j];
       if (value < -size || value >= size) {
-        AT_INDEX_ERROR("index ", value, " is out of bounds for dimension ", j, " with size ", size);
+        AT_ERROR("index ", value, " is out of bounds for dim with size ", size);
       }
       if (value < 0) {
         value += size;
@@ -58,11 +58,10 @@ static bool is_constant_index(int ntensor, const int64_t* strides) {
 }
 
 template <typename scalar_t, typename func_t>
-void cpu_index_kernel(TensorIterator& iter, IntArrayRef index_size, IntArrayRef index_stride,
+void cpu_index_kernel(TensorIterator& iter, IntList index_size, IntList index_stride,
                       const func_t& f, bool serial_execution=false)
 {
-  int ntensor = iter.ntensors();
-  auto loop = [&](char** data, const int64_t* strides, int64_t n) {
+  auto loop = [&](int ntensor, char** data, const int64_t* strides, int64_t n) {
     auto indexer = Indexer(ntensor - 2, &data[2], &strides[2], index_size, index_stride);
     char* dst = data[0];
     char* src = data[1];
@@ -92,17 +91,17 @@ void cpu_index_kernel(TensorIterator& iter, IntArrayRef index_size, IntArrayRef 
   }
 }
 
-void index_kernel(TensorIterator& iter, IntArrayRef index_size, IntArrayRef index_stride) {
-  AT_DISPATCH_ALL_TYPES_AND2(at::ScalarType::Half, at::ScalarType::Bool, iter.dtype(), "index_cpu", [&] {
+void index_kernel(TensorIterator& iter, IntList index_size, IntList index_stride) {
+  AT_DISPATCH_ALL_TYPES(iter.type(0), "index", [&] {
     cpu_index_kernel<scalar_t>(iter, index_size, index_stride, [](char* dst, char* src, int64_t offset) {
       *(scalar_t*)dst = *(scalar_t*)(src + offset);
     });
   });
 }
 
-void index_put_kernel(TensorIterator& iter, IntArrayRef index_size, IntArrayRef index_stride, bool accumulate) {
+void index_put_kernel(TensorIterator& iter, IntList index_size, IntList index_stride, bool accumulate) {
   // NOTE: duplicate indices are only supported if accumulate is true.
-  AT_DISPATCH_ALL_TYPES_AND2(at::ScalarType::Half, at::ScalarType::Bool, iter.dtype(), "index_put", [&] {
+  AT_DISPATCH_ALL_TYPES(iter.type(0), "index_put", [&] {
     if (accumulate) {
       // TODO: investigate parallelization of the accumulate kernel. Unlike the non-accumulate case,
       // this needs to be thread-safe.

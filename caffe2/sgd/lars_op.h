@@ -31,10 +31,10 @@ class LarsOp final : public Operator<Context> {
 
     auto* lr_rescaled = Output(0, vector<int64_t>{1}, at::dtype<T>());
 
-    ReinitializeTensor(&X_norm_tensor_, {1}, at::dtype<T>().device(Context::GetDeviceType()));
+    X_norm_tensor_.Resize(1);
     T* X_norm_ = X_norm_tensor_.template mutable_data<T>();
 
-    ReinitializeTensor(&dX_norm_tensor_, {1}, at::dtype<T>().device(Context::GetDeviceType()));
+    dX_norm_tensor_.Resize(1);
     T* dX_norm_ = dX_norm_tensor_.template mutable_data<T>();
 
     ComputeNorms(
@@ -84,8 +84,8 @@ class LarsOp final : public Operator<Context> {
   T offset_;
   T lr_min_;
 
-  Tensor X_norm_tensor_;
-  Tensor dX_norm_tensor_;
+  Tensor X_norm_tensor_{Context::GetDeviceType()};
+  Tensor dX_norm_tensor_{Context::GetDeviceType()};
 };
 
 } // namespace caffe2

@@ -22,7 +22,6 @@ REGISTER_CUDA_OPERATOR_WITH_ENGINE(
     BatchMatMul,
     TENSORCORE,
     BatchMatMulOp<CUDAContext, TensorCoreEngine>);
-
 #endif
 
 } // namespace caffe2

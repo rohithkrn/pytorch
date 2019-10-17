@@ -62,12 +62,12 @@ MACRO(Check_Fortran_Libraries LIBRARIES _prefix _name _flags _list)
       if ( APPLE )
         find_library(${_prefix}_${_library}_LIBRARY
           NAMES ${_library}
-          PATHS /usr/local/lib /usr/lib /usr/local/lib64 /usr/lib64 /opt/OpenBLAS/lib /usr/lib/aarch64-linux-gnu
+          PATHS /usr/local/lib /usr/lib /usr/local/lib64 /usr/lib64
           ENV DYLD_LIBRARY_PATH )
       else ( APPLE )
         find_library(${_prefix}_${_library}_LIBRARY
           NAMES ${_library}
-          PATHS /usr/local/lib /usr/lib /usr/local/lib64 /usr/lib64 /opt/OpenBLAS/lib /usr/lib/aarch64-linux-gnu
+          PATHS /usr/local/lib /usr/lib /usr/local/lib64 /usr/lib64
           ENV LD_LIBRARY_PATH )
       endif( APPLE )
       mark_as_advanced(${_prefix}_${_library}_LIBRARY)
@@ -208,20 +208,6 @@ if((NOT BLAS_LIBRARIES)
   "acml;gfortran")
   if (BLAS_LIBRARIES)
     set(BLAS_INFO "acml")
-  endif (BLAS_LIBRARIES)
-endif()
-
-if((NOT BLAS_LIBRARIES)
-    AND ((NOT WITH_BLAS) OR (WITH_BLAS STREQUAL "FLAME")))
-  # FLAME's blis library (https://github.com/flame/blis)
-  check_fortran_libraries(
-  BLAS_LIBRARIES
-  BLAS
-  sgemm
-  ""
-  "blis")
-  if (BLAS_LIBRARIES)
-    set(BLAS_INFO "FLAME")
   endif (BLAS_LIBRARIES)
 endif()
 

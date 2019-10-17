@@ -2,40 +2,32 @@
 
 // ${generated_comment}
 
-#include <c10/core/TensorOptions.h>
-#include <c10/core/Scalar.h>
-#include <c10/core/QScheme.h>
-#include <c10/core/MemoryFormat.h>
-#include <c10/util/ArrayRef.h>
-#include <c10/util/intrusive_ptr.h>
-#include <torch/csrc/WindowsTorchApiMacro.h>
-#include <ATen/Dimname.h>
-#include <ATen/core/EnableNamedTensor.h>
+#include <ATen/CPUTypeDefault.h>
+#include <ATen/Context.h>
+#include <ATen/CheckGenerator.h>
 
 $extra_cuda_headers
 
-namespace c10 {
-struct Storage;
-}
+#ifdef _MSC_VER
+#ifdef Type
+#undef Type
+#endif
+#endif
 
 namespace at {
 
-class Tensor;
-using TensorList = ArrayRef<Tensor>;
+struct ${Type} final : public ${DenseBackend}TypeDefault {
+  explicit ${Type}();
+  virtual ScalarType scalarType() const override;
+  virtual caffe2::TypeMeta typeMeta() const override;
+  virtual Backend backend() const override;
+  virtual const char * toString() const override;
+  virtual size_t elementSizeInBytes() const override;
+  virtual TypeID ID() const override;
 
-class Context;
-struct Generator;
-
-struct Quantizer;
-// This is temporary typedef to enable Quantizer in aten native function API
-// we'll remove them when we are actually exposing Quantizer class
-// to frontend
-using ConstQuantizerPtr = const c10::intrusive_ptr<Quantizer>&;
-
-#ifdef USE_STATIC_DISPATCH
-namespace ${Type} {
+  // example
+  // virtual Tensor * add(Tensor & a, Tensor & b) override;
   ${type_derived_method_declarations}
-}
-#endif
+};
 
 } // namespace at

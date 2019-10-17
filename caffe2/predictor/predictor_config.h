@@ -1,8 +1,7 @@
 #pragma once
 #include <memory>
-
+#include "caffe2/core/net.h"
 #include "caffe2/core/tensor.h"
-#include "caffe2/core/workspace.h"
 #include "caffe2/proto/metanet.pb.h"
 #include "caffe2/proto/predictor_consts.pb.h"
 

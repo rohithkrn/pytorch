@@ -20,8 +20,8 @@ class LengthsTileOp : public Operator<Context> {
 
  private:
   Tensor lengths_host_{CPU};
-  Tensor rowMappingHost_;
-  Tensor rowMappingDevice_;
+  Tensor rowMappingHost_{CPU};
+  Tensor rowMappingDevice_{Context::GetDeviceType()};
 };
 
 } // namespace caffe2

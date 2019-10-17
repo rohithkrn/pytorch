@@ -11,9 +11,8 @@ template <class Context>
 class ScaleOp final : public Operator<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
-  template <class... Args>
-  explicit ScaleOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...),
+  ScaleOp(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<Context>(operator_def, ws),
         scale_(this->template GetSingleArgument<float>("scale", 1.0)) {}
 
   template <typename T>

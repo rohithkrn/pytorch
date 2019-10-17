@@ -126,10 +126,7 @@ bool FullyConnectedFakeLowpFPOp<Q, Context, Engine, TransposeWeight>::
   // Add bias term
   if (bias_multiplier_.size() != M) {
     // If the helper bias multiplier is not M, reshape and fill it with one.
-    ReinitializeTensor(
-        &bias_multiplier_,
-        {M},
-        at::dtype<T_B>().device(Context::GetDeviceType()));
+    bias_multiplier_.Resize(M);
     math::Set<T_B, Context>(
         M,
         convert::To<float, T_B>(1),
@@ -182,7 +179,9 @@ bool FullyConnectedGradientFakeLowpFPOp<Q, Context, Engine, TransposeWeight>::
   CAFFE_ENFORCE(M * K == X.size());
   CAFFE_ENFORCE(K * N == W.size());
 
-  auto* dW = Output(0, W.sizes(), at::dtype<T_DW>());
+  auto* dW = Output(0);
+
+  dW->ResizeLike(W);
   auto* db = Output(1, {N}, at::dtype<T_DB>());
 
   if (X.size() == 0) {
@@ -199,7 +198,9 @@ bool FullyConnectedGradientFakeLowpFPOp<Q, Context, Engine, TransposeWeight>::
         &context_);
 
     if (OutputSize() == 3) {
-      Output(2, X.sizes(), at::dtype<T_DX>());
+      auto* dX = Output(2);
+      dX->ResizeLike(X);
+      dX->template mutable_data<T_DX>();
     }
 
     return true;
@@ -248,10 +249,7 @@ bool FullyConnectedGradientFakeLowpFPOp<Q, Context, Engine, TransposeWeight>::
   if (bias_multiplier_.size() != M) {
     // If the helper bias multiplier is not M, reshape and fill it
     // with one.
-    ReinitializeTensor(
-        &bias_multiplier_,
-        {M},
-        at::dtype<T_B>().device(Context::GetDeviceType()));
+    bias_multiplier_.Resize(M);
     math::Set<T_B, Context>(
         M,
         convert::To<float, T_B>(1),
@@ -272,7 +270,8 @@ bool FullyConnectedGradientFakeLowpFPOp<Q, Context, Engine, TransposeWeight>::
 
   // Compute dX
   if (OutputSize() == 3) {
-    auto* dX = Output(2, X.sizes(), at::dtype<T_DX>());
+    auto* dX = Output(2);
+    dX->ResizeLike(X);
     math::Gemm<T_DX, Context, Engine>(
         CblasNoTrans,
         TransposeWeight ? CblasNoTrans : CblasTrans,

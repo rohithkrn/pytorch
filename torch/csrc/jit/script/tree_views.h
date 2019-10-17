@@ -1,18 +1,14 @@
 #pragma once
-#include <c10/util/string_utils.h>
 #include <torch/csrc/jit/script/error_report.h>
-#include <torch/csrc/jit/script/strtod.h>
 #include <torch/csrc/jit/script/tree.h>
 
 #include <functional>
-#include <iostream>
 #include <string>
 
 namespace torch {
 namespace jit {
 namespace script {
 
-// clang-format off
 // TreeView provides a statically-typed way to traverse the tree, which should
 // be formed according to the grammar below.
 //
@@ -21,13 +17,10 @@ namespace script {
 // - Maybe<T> is really a Tree with kind TK_OPTION that has 0 or 1 subtree of type T
 // - Builtin types are: Ident (TK_IDENT), String (TK_STRING)
 //
-// Param = Param(Maybe<Expr> type, Ident name)                          TK_PARAM
+// Param = Param(Expr type, Ident name)                                 TK_PARAM
 //
 // Decl  = Decl(List<Param> params, Maybe<Expr> return_type)            TK_DECL
 // Def   = Def(Ident name, Decl decl, List<Stmt> body)                  TK_DEF
-// ClassDef = ClassDef(Ident name,                                      TK_CLASS_DEF
-//                     Maybe<Expr> superclass,
-//                     List<Stmt> body)
 //
 // Stmt  = If(Expr cond, List<Stmt> true_body, List<Stmt> false_body)   TK_IF
 //       | For(List<Expr> targets, List<Expr> iters, List<Stmt> body)   TK_FOR
@@ -35,12 +28,11 @@ namespace script {
 //       | Global(List<Ident> idents)                                   TK_GLOBAL
 //       -- NB: the only type of Expr's allowed on lhs are Var
 //          Or a tuple containing Var with an optional terminating Starred
-//       | Assign(Expr lhs, Maybe<Expr> rhs, Maybe<Expr> type)          TK_ASSIGN
+//       | Assign(Expr lhs, Expr rhs)                                  TK_ASSIGN
 //       | AugAssign(Expr lhs, AugAssignKind aug_op, Expr rhs)          TK_AUG_ASSIGN
 //       | Return(List<Expr> values)                                    TK_RETURN
 //       | ExprStmt(List<Expr> expr)                                    TK_EXPR_STMT
 //       | Raise(Expr expr)                                             TK_RAISE
-//       | Def                                                          TK_DEF
 //
 // Expr  = TernaryIf(Expr cond, Expr true_expr, Expr false_expr)        TK_IF_EXPR
 //       | BinOp(Expr lhs, Expr rhs)
@@ -96,7 +88,6 @@ namespace script {
 //    changes to the structure of Ident are always made right here rather
 //    than both in the parser and in this code.
 // XXX: these structs should have no fields to prevent slicing when passing by value
-// clang-format on
 struct TreeView {
   explicit TreeView(TreeRef tree) : tree_(std::move(tree)) {}
   TreeRef tree() const {
@@ -114,43 +105,25 @@ struct TreeView {
   int kind() const {
     return tree_->kind();
   }
-  void dump() const {
-    std::cout << tree_;
-  }
 
- protected:
+protected:
   const TreeRef& subtree(size_t i) const {
     return tree_->trees().at(i);
   }
   TreeRef tree_;
 };
 
-template <typename T>
+template<typename T>
 struct ListIterator {
   ListIterator(TreeList::const_iterator it) : it(it) {}
-  bool operator!=(const ListIterator& rhs) const {
-    return it != rhs.it;
-  }
-  bool operator==(const ListIterator& rhs) const {
-    return it == rhs.it;
-  }
-  T operator*() const {
-    return T(*it);
-  }
-  ListIterator& operator+=(std::ptrdiff_t n) {
-    it += n;
-    return *this;
-  }
-  ListIterator& operator++() {
-    ++it;
-    return *this;
-  }
-  ListIterator& operator--() {
-    --it;
-    return *this;
-  }
+  bool operator!=(const ListIterator& rhs) const { return it != rhs.it; }
+  bool operator==(const ListIterator& rhs) const { return it == rhs.it; }
+  T operator*() const { return T(*it); }
+  ListIterator& operator+=(std::ptrdiff_t n) { it += n; return *this; }
+  ListIterator& operator++() { ++it; return *this; }
+  ListIterator& operator--() { --it; return *this; }
 
- private:
+private:
   TreeList::const_iterator it;
 };
 
@@ -163,7 +136,7 @@ struct List : public TreeView {
     tree->match(TK_LIST);
     // Iterate over list to temporarily instantiate Ts that will check the type
     for (const T& elem : *this) {
-      (void)elem; // silence unused warning
+      (void) elem; //silence unused warning
     }
   }
   iterator begin() const {
@@ -182,11 +155,8 @@ struct List : public TreeView {
     return tree_->map([&](TreeRef v) { return fn(T(v)); });
   }
   static List create(const SourceRange& range, const std::vector<T>& subtrees) {
-    TreeList type_erased_sub{subtrees.begin(), subtrees.end()};
+    TreeList type_erased_sub {subtrees.begin(), subtrees.end()};
     return List(Compound::create(TK_LIST, range, std::move(type_erased_sub)));
-  }
-  static List unsafeCreate(const SourceRange& range, TreeList&& subtrees) {
-    return List(Compound::create(TK_LIST, range, std::move(subtrees)));
   }
   size_t size() const {
     return tree_->trees().size();
@@ -248,13 +218,9 @@ struct Stmt : public TreeView {
       case TK_RAISE:
       case TK_ASSERT:
       case TK_PASS:
-      case TK_BREAK:
-      case TK_CONTINUE:
-      case TK_DEF:
         return;
       default:
-        throw ErrorReport(tree)
-            << kindToString(tree->kind()) << " is not a valid Stmt";
+        throw ErrorReport(tree) << kindToString(tree->kind()) << " is not a valid Stmt";
     }
   }
 };
@@ -276,7 +242,6 @@ struct Expr : public TreeView {
       case '+':
       case '-':
       case TK_UNARY_MINUS:
-      case '~':
       case '*':
       case TK_STARRED:
       case '/':
@@ -295,20 +260,15 @@ struct Expr : public TreeView {
       case TK_VAR:
       case TK_LIST_LITERAL:
       case TK_TUPLE_LITERAL:
-      case TK_DICT_LITERAL:
       case '@':
       case TK_POW:
       case TK_FLOOR_DIV:
       case '&':
       case '^':
       case '|':
-      case TK_LIST_COMP:
-      case TK_DOTS:
-      case TK_IN:
         return;
       default:
-        throw ErrorReport(tree)
-            << kindToString(tree->kind()) << " is not a valid Expr";
+        throw ErrorReport(tree) << kindToString(tree->kind()) << " is not a valid Expr";
     }
   }
 };
@@ -327,43 +287,30 @@ struct Attribute : public TreeView {
   Expr value() const {
     return Expr(subtree(1));
   }
-  static Attribute create(
-      const SourceRange& range,
-      const Ident& name,
-      const TreeRef& value) {
+  static Attribute create(const SourceRange& range, const Ident& name, const TreeRef& value) {
     return Attribute(Compound::create(TK_ATTRIBUTE, range, {name, value}));
   }
 };
+
 
 struct Param : public TreeView {
   explicit Param(const TreeRef& tree) : TreeView(tree) {
     tree_->match(TK_PARAM);
   }
-  static Param create(
-      const SourceRange& range,
-      const Ident& ident,
-      const Maybe<Expr>& type,
-      const Maybe<Expr>& def,
-      bool kwarg_only) {
-    TreeRef kwarg_only_tree =
-        Compound::create(kwarg_only ? TK_TRUE : TK_FALSE, range, {});
-    return Param(
-        Compound::create(TK_PARAM, range, {ident, type, def, kwarg_only_tree}));
+  static Param create(const SourceRange& range, const Ident& ident, const Expr& type, const Maybe<Expr>& def) {
+    return Param(Compound::create(TK_PARAM, range, {ident, type, def}));
   }
   Ident ident() const {
     return Ident(subtree(0));
   }
-  Maybe<Expr> type() const {
-    return Maybe<Expr>(subtree(1));
+  Expr type() const {
+    return Expr(subtree(1));
   }
   Maybe<Expr> defaultValue() const {
     return Maybe<Expr>(subtree(2));
   }
-  bool kwarg_only() const {
-    return TK_TRUE == subtree(3)->kind();
-  }
-  Param withType(const Maybe<Expr>& typ) const {
-    return Param::create(range(), ident(), typ, defaultValue(), kwarg_only());
+  Param withType(const Expr& typ) const {
+    return Param::create(range(), ident(), typ, defaultValue());
   }
 };
 
@@ -381,10 +328,7 @@ struct Decl : public TreeView {
   Maybe<Expr> return_type() const {
     return Maybe<Expr>(subtree(1));
   }
-  static Decl create(
-      const SourceRange& range,
-      const List<Param>& params,
-      const Maybe<Expr>& return_type) {
+  static Decl create(const SourceRange& range, const List<Param>& params, const Maybe<Expr>& return_type) {
     return Decl(Compound::create(TK_DECL, range, {params, return_type}));
   }
 };
@@ -396,9 +340,6 @@ struct Def : public TreeView {
   Def withName(std::string new_name) const {
     auto new_ident = Ident::create(name().range(), std::move(new_name));
     return create(range(), new_ident, decl(), statements());
-  }
-  Def withDecl(Decl decl) const {
-    return create(range(), name(), decl, statements());
   }
   Ident name() const {
     return Ident(subtree(0));
@@ -414,36 +355,11 @@ struct Def : public TreeView {
       const Ident& name,
       const Decl& decl,
       const List<Stmt>& stmts) {
-    return Def(Compound::create(TK_DEF, range, {name, decl, stmts}));
+    return Def(Compound::create(
+        TK_DEF, range, {name, decl, stmts}));
   }
 };
 
-struct ClassDef : public TreeView {
-  explicit ClassDef(const TreeRef& tree) : TreeView(tree) {
-    tree->match(TK_CLASS_DEF);
-  }
-  ClassDef withName(std::string new_name) const {
-    auto new_ident = Ident::create(name().range(), std::move(new_name));
-    return create(range(), new_ident, superclass(), body());
-  }
-  Ident name() const {
-    return Ident(subtree(0));
-  }
-  Maybe<Expr> superclass() const {
-    return Maybe<Expr>(subtree(1));
-  }
-  List<Stmt> body() const {
-    return List<Stmt>(subtree(2));
-  }
-  static ClassDef create(
-      const SourceRange& range,
-      const Ident& name,
-      const Maybe<Expr>& superclass,
-      const List<Stmt>& body) {
-    return ClassDef(
-        Compound::create(TK_CLASS_DEF, range, {name, superclass, body}));
-  }
-};
 
 ////////////////////////////////////////////////////////////////////////////////
 // Statements
@@ -462,18 +378,12 @@ struct If : public Stmt {
   List<Stmt> falseBranch() const {
     return List<Stmt>(subtree(2));
   }
-  If withNewBranches(
-      const List<Stmt>& true_branch,
-      const List<Stmt>& false_branch) const {
-    return create(range(), cond(), true_branch, false_branch);
-  }
   static If create(
       const SourceRange& range,
       const Expr& cond,
       const List<Stmt>& true_branch,
       const List<Stmt>& false_branch) {
-    return If(
-        Compound::create(TK_IF, range, {cond, true_branch, false_branch}));
+    return If(Compound::create(TK_IF, range, {cond, true_branch, false_branch}));
   }
 };
 
@@ -487,10 +397,7 @@ struct While : public Stmt {
   List<Stmt> body() const {
     return List<Stmt>(subtree(1));
   }
-  static While create(
-      const SourceRange& range,
-      const Expr& cond,
-      const List<Stmt>& body) {
+  static While create(const SourceRange& range, const Expr& cond, const List<Stmt>& body) {
     return While(Compound::create(TK_WHILE, range, {cond, body}));
   }
 };
@@ -514,30 +421,6 @@ struct For : public Stmt {
       const List<Expr>& itrs,
       const List<Stmt>& body) {
     return For(Compound::create(TK_FOR, range, {targets, itrs, body}));
-  }
-};
-
-// TODO: supports only single comprehension for now
-struct ListComp : public Expr {
-  explicit ListComp(const TreeRef& tree) : Expr(tree) {
-    tree->match(TK_LIST_COMP);
-  }
-  Expr elt() const {
-    return Expr(subtree(0));
-  }
-  Expr target() const {
-    return Expr(subtree(1));
-  }
-  Expr iter() const {
-    return Expr(subtree(2));
-  }
-  // TODO: no ifs for now
-  static ListComp create(
-      const SourceRange& range,
-      const Expr& elt,
-      const Expr& target,
-      const Expr& iter) {
-    return ListComp(Compound::create(TK_LIST_COMP, range, {elt, target, iter}));
   }
 };
 
@@ -591,34 +474,22 @@ struct AugAssign : public Stmt {
   }
 };
 
+
 struct Assign : public Stmt {
   explicit Assign(const TreeRef& tree) : Stmt(tree) {
     tree_->match(TK_ASSIGN);
   }
   static Assign create(
       const SourceRange& range,
-      const List<Expr>& lhs,
-      const Maybe<Expr>& rhs,
-      const Maybe<Expr>& type) {
-    return Assign(Compound::create(TK_ASSIGN, range, {lhs, rhs, type}));
+      const Expr& lhs,
+      const Expr& rhs) {
+    return Assign(Compound::create(TK_ASSIGN, range, {lhs, rhs}));
   }
-
-  List<Expr> lhs_list() const {
-    return List<Expr>(subtree(0));
-  }
-
   Expr lhs() const {
-    const auto& li = lhs_list();
-    TORCH_INTERNAL_ASSERT(li.size() == 1);
-    return *li.begin();
+    return Expr(subtree(0));
   }
-
-  Maybe<Expr> rhs() const {
-    return Maybe<Expr>(subtree(1));
-  }
-
-  Maybe<Expr> type() const {
-    return Maybe<Expr>(subtree(2));
+  Expr rhs() const {
+    return Expr(subtree(1));
   }
 };
 
@@ -626,11 +497,11 @@ struct Return : public Stmt {
   explicit Return(const TreeRef& tree) : Stmt(tree) {
     tree_->match(TK_RETURN);
   }
-  Expr expr() const {
-    return Expr(subtree(0));
+  List<Expr> values() const {
+    return List<Expr>(subtree(0));
   }
-  static Return create(const SourceRange& range, const Expr& value) {
-    return Return(Compound::create(TK_RETURN, range, {value}));
+  static Return create(const SourceRange& range, const List<Expr>& values) {
+    return Return(Compound::create(TK_RETURN, range, {values}));
   }
 };
 
@@ -643,10 +514,6 @@ struct Raise : public Stmt {
   }
   static Raise create(const SourceRange& range, const Maybe<Expr>& expr) {
     return Raise(Compound::create(TK_RAISE, range, {expr}));
-  }
-  static Raise create(const SourceRange& range) {
-    return Raise(
-        Compound::create(TK_RAISE, range, {Maybe<Expr>::create(range)}));
   }
 };
 
@@ -672,37 +539,12 @@ struct Pass : public Stmt {
   explicit Pass(const TreeRef& tree) : Stmt(tree) {
     tree_->match(TK_PASS);
   }
-  static Pass create(const SourceRange& range) {
+  static Pass create(
+      const SourceRange& range) {
     return Pass(Compound::create(TK_PASS, range, {}));
   }
 };
 
-struct Dots : public Expr {
-  explicit Dots(const TreeRef& tree) : Expr(tree) {
-    tree_->match(TK_DOTS);
-  }
-  static Dots create(const SourceRange& range) {
-    return Dots(Compound::create(TK_DOTS, range, {}));
-  }
-};
-
-struct Break : public Stmt {
-  explicit Break(const TreeRef& tree) : Stmt(tree) {
-    tree_->match(TK_BREAK);
-  }
-  static Break create(const SourceRange& range) {
-    return Break(Compound::create(TK_BREAK, range, {}));
-  }
-};
-
-struct Continue : public Stmt {
-  explicit Continue(const TreeRef& tree) : Stmt(tree) {
-    tree_->match(TK_CONTINUE);
-  }
-  static Continue create(const SourceRange& range) {
-    return Continue(Compound::create(TK_CONTINUE, range, {}));
-  }
-};
 
 struct ExprStmt : public Stmt {
   explicit ExprStmt(const TreeRef& tree) : Stmt(tree) {
@@ -715,6 +557,7 @@ struct ExprStmt : public Stmt {
     return ExprStmt(Compound::create(TK_EXPR_STMT, range, {list}));
   }
 };
+
 
 ////////////////////////////////////////////////////////////////////////////////
 // Expressions
@@ -744,14 +587,11 @@ struct BinOp : public Expr {
       case '^':
       case '|':
       case TK_FLOOR_DIV:
-      case TK_IN:
         if (tree->trees().size() != 2)
-          throw ErrorReport(tree)
-              << "BinOp expected 2 subtrees, found " << tree->trees().size();
+          throw ErrorReport(tree) << "BinOp expected 2 subtrees, found " << tree->trees().size();
         return;
       default:
-        throw ErrorReport(tree)
-            << kindToString(tree->kind()) << " is not a valid BinOp";
+        throw ErrorReport(tree) << kindToString(tree->kind()) << " is not a valid BinOp";
     }
   }
   Expr lhs() const {
@@ -760,11 +600,7 @@ struct BinOp : public Expr {
   Expr rhs() const {
     return Expr(subtree(1));
   }
-  static BinOp create(
-      const SourceRange& range,
-      int kind,
-      const Expr& lhs,
-      const Expr& rhs) {
+  static BinOp create(const SourceRange& range, int kind, const Expr& lhs, const Expr& rhs) {
     return BinOp(Compound::create(kind, range, {lhs, rhs}));
   }
 };
@@ -773,15 +609,12 @@ struct UnaryOp : public Expr {
   explicit UnaryOp(const TreeRef& tree) : Expr(tree) {
     switch (tree->kind()) {
       case TK_UNARY_MINUS:
-      case '~':
       case TK_NOT:
         if (tree->trees().size() != 1)
-          throw ErrorReport(tree)
-              << "UnaryOp expected 1 subtree, found " << tree->trees().size();
+          throw ErrorReport(tree) << "UnaryOp expected 1 subtree, found " << tree->trees().size();
         return;
       default:
-        throw ErrorReport(tree)
-            << kindToString(tree->kind()) << " is not a valid UnaryOp";
+        throw ErrorReport(tree) << kindToString(tree->kind()) << " is not a valid UnaryOp";
     }
   }
   static UnaryOp create(const SourceRange& range, int kind, const Expr& expr) {
@@ -800,12 +633,10 @@ struct Const : public Expr {
     return !isFloatingPoint();
   }
   int64_t asIntegral() const {
-    return c10::stoll(subtree(0)->stringValue());
+    return std::stoll(subtree(0)->stringValue());
   }
   double asFloatingPoint() const {
-    char* dummy;
-    return torch::jit::script::strtod_c(
-        subtree(0)->stringValue().c_str(), &dummy);
+    return SharedParserData::strtod_c(subtree(0)->stringValue().c_str(), nullptr);
   }
   const std::string& text() const {
     return subtree(0)->stringValue();
@@ -822,11 +653,8 @@ struct StringLiteral : public Expr {
   const std::string& text() const {
     return subtree(0)->stringValue();
   }
-  static StringLiteral create(
-      const SourceRange& range,
-      const std::string& value) {
-    return StringLiteral(
-        Compound::create(TK_STRINGLITERAL, range, {String::create(value)}));
+  static StringLiteral create(const SourceRange& range, const std::string& value) {
+    return StringLiteral(Compound::create(TK_STRINGLITERAL, range, {String::create(value)}));
   }
 };
 
@@ -848,8 +676,7 @@ struct Apply : public Expr {
       const Expr& callee,
       const List<Expr>& inputs,
       const List<Attribute>& attributes) {
-    return Apply(
-        Compound::create(TK_APPLY, range, {callee, inputs, attributes}));
+    return Apply(Compound::create(TK_APPLY, range, {callee, inputs, attributes}));
   }
 };
 
@@ -863,10 +690,7 @@ struct Select : public Expr {
   Ident selector() const {
     return Ident(subtree(1));
   }
-  static Select create(
-      const SourceRange& range,
-      const Expr& value,
-      const Ident& selector) {
+  static Select create(const SourceRange& range, const Expr& value, const Ident& selector) {
     return Select(Compound::create('.', range, {value, selector}));
   }
 };
@@ -881,9 +705,6 @@ struct SliceExpr : public Expr {
   Maybe<Expr> end() const {
     return Maybe<Expr>(subtree(1));
   }
-  Maybe<Expr> step() const {
-    return Maybe<Expr>(subtree(2));
-  }
   Expr startOr(int alternative) const {
     const auto startOption = start();
     return startOption.present() ? startOption.get() : createInt(alternative);
@@ -892,19 +713,13 @@ struct SliceExpr : public Expr {
     const auto endOption = end();
     return endOption.present() ? endOption.get() : createInt(alternative);
   }
-  Expr stepOr(int alternative) const {
-    const auto stepOption = step();
-    return stepOption.present() ? stepOption.get() : createInt(alternative);
-  }
   static SliceExpr create(
       const SourceRange& range,
       const Maybe<Expr>& start,
-      const Maybe<Expr>& end,
-      const Maybe<Expr>& step) {
-    return SliceExpr(Compound::create(TK_SLICE_EXPR, range, {start, end, step}));
+      const Maybe<Expr>& end) {
+    return SliceExpr(Compound::create(TK_SLICE_EXPR, range, {start, end}));
   }
-
- private:
+private:
   Expr createInt(int value) const {
     return Expr(Const::create(range(), std::to_string(value)));
   }
@@ -924,8 +739,7 @@ struct Subscript : public Expr {
       const SourceRange& range,
       const Expr& value,
       const List<Expr>& subscript_exprs) {
-    return Subscript(
-        Compound::create(TK_SUBSCRIPT, range, {value, subscript_exprs}));
+    return Subscript(Compound::create(TK_SUBSCRIPT, range, {value, subscript_exprs}));
   }
 };
 
@@ -954,15 +768,14 @@ struct TernaryIf : public Expr {
   Expr false_expr() const {
     return Expr(subtree(2));
   }
-  static TernaryIf create(
-      const SourceRange& range,
-      const Expr& cond,
-      const Expr& true_expr,
-      const Expr& false_expr) {
-    return TernaryIf(
-        Compound::create(TK_IF_EXPR, range, {cond, true_expr, false_expr}));
+  static TernaryIf create(const SourceRange& range,
+                          const Expr& cond,
+                          const Expr& true_expr,
+                          const Expr& false_expr) {
+    return TernaryIf(Compound::create(TK_IF_EXPR, range, {cond, true_expr, false_expr}));
   };
 };
+
 
 struct ListLiteral : public Expr {
   explicit ListLiteral(const TreeRef& tree) : Expr(tree) {
@@ -971,9 +784,7 @@ struct ListLiteral : public Expr {
   List<Expr> inputs() const {
     return subtree(0);
   }
-  static ListLiteral create(
-      const SourceRange& range,
-      const List<Expr>& inputs) {
+  static ListLiteral create(const SourceRange& range, const List<Expr>& inputs) {
     return ListLiteral(Compound::create(TK_LIST_LITERAL, range, {inputs}));
   }
 };
@@ -985,29 +796,8 @@ struct TupleLiteral : public Expr {
   List<Expr> inputs() const {
     return subtree(0);
   }
-  static TupleLiteral create(
-      const SourceRange& range,
-      const List<Expr>& inputs) {
+  static TupleLiteral create(const SourceRange& range, const List<Expr>& inputs) {
     return TupleLiteral(Compound::create(TK_TUPLE_LITERAL, range, {inputs}));
-  }
-};
-
-struct DictLiteral : public Expr {
-  explicit DictLiteral(const TreeRef& tree) : Expr(tree) {
-    tree_->match(TK_DICT_LITERAL);
-  }
-  List<Expr> key_inputs() const {
-    return subtree(0);
-  }
-  List<Expr> value_inputs() const {
-    return subtree(1);
-  }
-  static DictLiteral create(
-      const SourceRange& range,
-      const List<Expr>& keys,
-      const List<Expr>& values) {
-    return DictLiteral(
-        Compound::create(TK_DICT_LITERAL, range, {keys, values}));
   }
 };
 
@@ -1029,8 +819,8 @@ struct Starred : public Expr {
 
 namespace std {
 
-template <typename T>
+template<typename T>
 struct iterator_traits<torch::jit::script::ListIterator<T>>
-    : std::iterator_traits<torch::jit::script::TreeList::const_iterator> {};
+  : std::iterator_traits<torch::jit::script::TreeList::const_iterator> {};
 
 } // namespace std

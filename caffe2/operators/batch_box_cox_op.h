@@ -12,9 +12,8 @@ template <class Context>
 class BatchBoxCoxOp final : public Operator<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
-  template <class... Args>
-  explicit BatchBoxCoxOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...),
+  BatchBoxCoxOp(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<Context>(operator_def, ws),
         min_block_size_(
             this->template GetSingleArgument<int>("min_block_size", 256)) {}
 

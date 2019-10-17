@@ -1,5 +1,5 @@
-#ifndef CAFFE2_OPERATORS_EXPAND_OP_H_
-#define CAFFE2_OPERATORS_EXPAND_OP_H_
+#ifndef CAFFE2_OPERATORS_REDUCE_OPS_H_
+#define CAFFE2_OPERATORS_REDUCE_OPS_H_
 
 #include <vector>
 
@@ -15,9 +15,8 @@ class ExpandOp final : public Operator<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
 
-  template <class... Args>
-  explicit ExpandOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...) {}
+  ExpandOp(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<Context>(operator_def, ws) {}
 
   bool RunOnDevice() override {
     return DispatchHelper<InputTypes>::call(this, Input(0));
@@ -72,9 +71,8 @@ class ExpandGradientOp final : public Operator<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
 
-  template <class... Args>
-  explicit ExpandGradientOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...) {}
+  ExpandGradientOp(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<Context>(operator_def, ws) {}
 
   bool RunOnDevice() override {
     return DispatchHelper<InputTypes>::call(this, Input(0));
@@ -96,14 +94,11 @@ class ExpandGradientOp final : public Operator<Context> {
         axes.push_back(i);
       }
     }
-    std::vector<int> X_dims = dY_dims;
-    for (const int axis : axes) {
-      X_dims[axis] = 1;
-    }
     math::ReduceSum<T, Context>(
         dY_dims.size(),
         dY_dims.data(),
-        X_dims.data(),
+        axes.size(),
+        axes.data(),
         T(1),
         dY.template data<T>(),
         dX->template mutable_data<T>(),

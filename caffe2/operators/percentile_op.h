@@ -17,17 +17,16 @@ template <class Context>
 class PercentileOp final : public Operator<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
-  template <class... Args>
-  explicit PercentileOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...) {}
+  PercentileOp(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<Context>(operator_def, ws) {}
 
   bool RunOnDevice() override;
 
  protected:
   INPUT_TAGS(X, VAL_PCT_PAIRS, LENS);
   OUTPUT_TAGS(PCT);
-  Tensor values_tensor;
-  Tensor percentiles_tensor;
+  Tensor values_tensor{Context::GetDeviceType()};
+  Tensor percentiles_tensor{Context::GetDeviceType()};
 };
 
 } // namespace caffe2

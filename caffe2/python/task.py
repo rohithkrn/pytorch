@@ -52,10 +52,6 @@ class Cluster(object):
     def node_kwargs(self):
         return self._node_kwargs
 
-    def __repr__(self):
-        return "Cluster(nodes={}, node_kwargs={})".format(
-            self.nodes(), self.node_kwargs())
-
 
 @context.define_context(allow_default=True)
 class Node(object):
@@ -88,9 +84,6 @@ class Node(object):
 
     def __str__(self):
         return self._name
-
-    def __repr__(self):
-        return "Node(name={}, kwargs={})".format(self._name, self._kwargs)
 
     def kwargs(self):
         return self._kwargs
@@ -352,10 +345,6 @@ class TaskGroup(object):
     def workspace_type(self):
         return self._workspace_type
 
-    def __repr__(self):
-        return "TaskGroup(tasks={}, workspace_type={}, remote_nets={})".format(
-            self.tasks(), self.workspace_type(), self.remote_nets())
-
 
 class TaskOutput(object):
     """
@@ -400,9 +389,6 @@ class TaskOutput(object):
         else:
             return fetched_vals
 
-    def __repr__(self):
-        return "TaskOutput(names={}, values={})".format(self.names, self._values)
-
 
 def final_output(blob_or_record):
     """
@@ -438,9 +424,6 @@ class TaskOutputList(object):
             offset += num
         assert offset == len(values), 'Wrong number of output values.'
 
-    def __repr__(self):
-        return "TaskOutputList(outputs={})".format(self.outputs)
-
 
 @context.define_context()
 class Task(object):
@@ -465,7 +448,7 @@ class Task(object):
             with ops.task_instance_exit():
                 ops.Add([globl, local], [globl])
             with ops.task_exit():
-                ops.Mul([globl, globl], [globl])
+                ops.Mul([globl, globl], [blobl])
 
     The task above will create 2 instances that will run in parallel.
     Each instance will copy `local` to `globl` 100 times, Then Add `local`
@@ -642,10 +625,6 @@ class Task(object):
         self.get_step()
         self._already_used = True
 
-    def __repr__(self):
-        return "Task(name={}, node={}, outputs={})".format(
-            self.name, self.node, self.outputs())
-
 
 class SetupNets(object):
     """
@@ -689,7 +668,3 @@ class SetupNets(object):
 
     def exit(self, exit_net):
         return self.exit_nets
-
-    def __repr__(self):
-        return "SetupNets(init_nets={}, exit_nets={})".format(
-            self.init_nets, self.exit_nets)

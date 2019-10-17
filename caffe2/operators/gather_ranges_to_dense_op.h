@@ -19,9 +19,8 @@ template <class Context>
 class GatherRangesToDenseOp final : public Operator<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
-  template <class... Args>
-  explicit GatherRangesToDenseOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...),
+  GatherRangesToDenseOp(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<Context>(operator_def, ws),
         lengths_(this->template GetRepeatedArgument<int>("lengths")) {
     CAFFE_ENFORCE_GT(lengths_.size(), 0, "There has to be at least one length");
     for (auto length : lengths_) {

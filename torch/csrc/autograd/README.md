@@ -20,14 +20,14 @@ The most complicated application of this principle is Function, which also
 supports users implementing custom behavior in Python.  We have the following
 classes:
 
-* `Node` in `function.h`, the C++ type.
+* `Function` in `function.h`, the C++ type.
 * `THPFunction` in `python_function.h`, the Python object type.  In
   `python_function.cpp`, you can see the boilerplate that tells the Python
   interpreter about this object.
-* `PyNode` in `python_function.h`, a subclass of `Node` which forwards
+* `PyFunction` in `python_function.h`, a subclass of `Function` which forwards
   `apply` to a Python `THPFunction`. (NOT a Python object, despite its name!)
 
-Outside of `PyNode`, the C++ objects largely avoid referencing Python
+Outside of `PyFunction`, the C++ objects largely avoid referencing Python
 objects (there are a few exceptions, like `pyobj` in `Variable`, and
-`PyNode`, whose whole point is to let C++ call into Python). And `pyobj`
-in `Node` to ensure uniqueness of the associated python wrapper (if it exists).
+`PyFunction`, whose whole point is to let C++ call into Python). And `pyobj`
+in `Function` to ensure uniqueness of the associated python wrapper (if it exists).

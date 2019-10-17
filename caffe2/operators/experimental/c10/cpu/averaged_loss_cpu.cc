@@ -1,6 +1,5 @@
-#include <ATen/core/op_registration/op_registration.h>
-#include "caffe2/core/export_c10_op_to_caffe2.h"
-#include "caffe2/core/tensor.h"
+#include <c10/core/dispatch/KernelRegistration.h>
+#include "caffe2/operators/experimental/c10/schemas/averaged_loss.h"
 #include "caffe2/utils/math.h"
 
 using caffe2::BaseContext;
@@ -11,47 +10,38 @@ namespace caffe2 {
 namespace {
 
 template <class T, class Context>
-class averaged_loss_cpu final : public c10::OperatorKernel {
- public:
-  void operator()(const at::Tensor& X_, const at::Tensor& sum_) {
-    Tensor X(X_);
-    Tensor sum(sum_);
-    CPUContext context;
+void averaged_loss_op_cpu_impl(
+    const Tensor& X,
+    Tensor* sum,
+    caffe2::ops::AveragedLoss::State* state,
+    BaseContext* context) {
+  sum->Resize(vector<int64_t>());
 
-    sum.Resize(vector<int64_t>());
+  T* data = sum->template mutable_data<T>();
 
-    T* data = sum.template mutable_data<T>();
-
-    Tensor scratch(scratch_);
-    caffe2::math::Sum<T, Context>(
-        X.numel(),
-        X.template data<T>(),
+  caffe2::math::Sum<T, Context>(
+      X.numel(),
+      X.template data<T>(),
+      data,
+      static_cast<Context*>(context),
+      &state->scratch);
+  if (X.numel() > 0) {
+    caffe2::math::Scale<T, T, Context>(
+        1,
+        static_cast<T>(1.) / X.numel(),
+        sum->template data<T>(),
         data,
-        static_cast<Context*>(&context),
-        &scratch);
-    if (X.numel() > 0) {
-      caffe2::math::Scale<T, T, Context>(
-          1,
-          static_cast<T>(1.) / X.numel(),
-          sum.template data<T>(),
-          data,
-          static_cast<Context*>(&context));
-    }
+        static_cast<Context*>(context));
   }
-
- private:
-  at::Tensor scratch_ = at::Tensor(empty({}, CPU));
-};
-
-static auto registry = c10::RegisterOperators().op(
-    "_c10_experimental::AveragedLoss",
-    c10::RegisterOperators::options()
-      .kernel<averaged_loss_cpu<float, CPUContext>>(TensorTypeId::CPUTensorId));
-
+}
 } // namespace
-
-C10_EXPORT_C10_OP_TO_CAFFE2_CPU(
-    "_c10_experimental::AveragedLoss",
-    C10AveragedLoss_DontUseThisOpYet)
-
 } // namespace caffe2
+
+namespace c10 {
+C10_REGISTER_KERNEL(caffe2::ops::AveragedLoss)
+    .kernel(&caffe2::averaged_loss_op_cpu_impl<float, caffe2::CPUContext>)
+    .dispatchKey(c10::DispatchKey<1>{c10::details::TensorParameterDispatchKey{
+        DeviceTypeId::CPU,
+        LayoutId(0),
+        caffe2::TypeMeta::Id<float>()}});
+} // namespace c10

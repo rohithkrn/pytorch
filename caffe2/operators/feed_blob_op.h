@@ -9,9 +9,8 @@ namespace caffe2 {
 template <class Context>
 class FeedBlobOp : public Operator<Context> {
  public:
-  template <class... Args>
-  explicit FeedBlobOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...) {
+  FeedBlobOp(const OperatorDef& def, Workspace* ws)
+      : Operator<Context>(def, ws) {
     CAFFE_ENFORCE(
         this->template HasSingleArgumentOfType<string>("value"),
         "value argument must exist and be passed as a string");

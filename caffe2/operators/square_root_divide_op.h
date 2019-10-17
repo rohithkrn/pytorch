@@ -13,9 +13,8 @@ class SquareRootDivideOp final : public Operator<Context> {
   USE_OPERATOR_CONTEXT_FUNCTIONS;
   USE_DISPATCH_HELPER;
 
-  template <class... Args>
-  explicit SquareRootDivideOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...) {}
+  SquareRootDivideOp(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<Context>(operator_def, ws) {}
 
   bool RunOnDevice() override {
     return DispatchHelper<TensorTypes<float>>::call(this, Input(DATA));

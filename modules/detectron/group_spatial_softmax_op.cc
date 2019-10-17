@@ -14,9 +14,8 @@
  * limitations under the License.
  */
 
-#include "modules/detectron/group_spatial_softmax_op.h"
-
-#include "caffe2/operators/softmax_utils.h"
+#include "group_spatial_softmax_op.h"
+#include "caffe2/operators/softmax_shared.h"
 
 namespace caffe2 {
 
@@ -60,12 +59,18 @@ See: https://arxiv.org/abs/1708.02002 for details.
 OPERATOR_SCHEMA(GroupSpatialSoftmaxGradient)
     .NumInputs(2)
     .NumOutputs(1)
-    .Input(0, "scores", "See GroupSpatialSoftmax")
+    .Input(
+        0,
+        "scores",
+        "See GroupSpatialSoftmax")
     .Input(
         1,
         "d_probabilities",
         "Gradient of forward output 0 (probabilities).")
-    .Output(0, "d_scores", "Gradient of forward input 0 (scores).");
+    .Output(
+        0,
+        "d_scores",
+        "Gradient of forward input 0 (scores).");
 
 class GetGroupSpatialSoftmaxGradient : public GradientMakerBase {
   using GradientMakerBase::GradientMakerBase;
@@ -79,5 +84,4 @@ class GetGroupSpatialSoftmaxGradient : public GradientMakerBase {
 };
 
 REGISTER_GRADIENT(GroupSpatialSoftmax, GetGroupSpatialSoftmaxGradient);
-
 } // namespace caffe2

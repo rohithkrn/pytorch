@@ -10,9 +10,8 @@ class CuDNNActivationOp<CUDNN_ACTIVATION_ELU> final
  public:
   USE_OPERATOR_FUNCTIONS(CUDAContext);
 
-  template <class... Args>
-  explicit CuDNNActivationOp(Args&&... args)
-      : CuDNNActivationOpBase(std::forward<Args>(args)...),
+  CuDNNActivationOp(const OperatorDef& operator_def, Workspace* ws)
+      : CuDNNActivationOpBase(operator_def, ws),
         OP_SINGLE_ARG(float, "alpha", alpha_, 1.0f) {
     CUDNN_ENFORCE(cudnnSetActivationDescriptor(
         act_desc_,
@@ -57,9 +56,8 @@ class CuDNNActivationGradientOp<CUDNN_ACTIVATION_ELU> final
  public:
   USE_OPERATOR_FUNCTIONS(CUDAContext);
 
-  template <class... Args>
-  explicit CuDNNActivationGradientOp(Args&&... args)
-      : CuDNNActivationOpBase(std::forward<Args>(args)...),
+  CuDNNActivationGradientOp(const OperatorDef& operator_def, Workspace* ws)
+      : CuDNNActivationOpBase(operator_def, ws),
         OP_SINGLE_ARG(float, "alpha", alpha_, 1.0f) {
     CUDNN_ENFORCE(cudnnSetActivationDescriptor(
         act_desc_,

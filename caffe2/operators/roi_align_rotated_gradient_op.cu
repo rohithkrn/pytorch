@@ -91,8 +91,7 @@ __global__ void RoIAlignRotatedBackward(
     const int pooled_width,
     const int sampling_ratio,
     T* bottom_diff,
-    const T* bottom_rois,
-    bool continuous_coordinate) {
+    const T* bottom_rois) {
   CUDA_1D_KERNEL_LOOP(index, nthreads) {
     // (n, c, ph, pw) is an element in the pooled output
     int pw = index % pooled_width;
@@ -104,18 +103,15 @@ __global__ void RoIAlignRotatedBackward(
     int roi_batch_ind = offset_bottom_rois[0];
 
     // Do not round
-    T roi_offset = continuous_coordinate ? T(0.5) : 0;
-    T roi_center_w = offset_bottom_rois[1] * spatial_scale - roi_offset;
-    T roi_center_h = offset_bottom_rois[2] * spatial_scale - roi_offset;
+    T roi_center_w = offset_bottom_rois[1] * spatial_scale;
+    T roi_center_h = offset_bottom_rois[2] * spatial_scale;
     T roi_width = offset_bottom_rois[3] * spatial_scale;
     T roi_height = offset_bottom_rois[4] * spatial_scale;
     T theta = offset_bottom_rois[5] * M_PI / 180.0;
 
-    if (!continuous_coordinate) { // backward compatiblity
-      // Force malformed ROIs to be 1x1
-      roi_width = c10::cuda::compat::max(roi_width, (T)1.);
-      roi_height = c10::cuda::compat::max(roi_height, (T)1.);
-    }
+    // Force malformed ROIs to be 1x1
+    roi_width = c10::cuda::compat::max(roi_width, (T)1.);
+    roi_height = c10::cuda::compat::max(roi_height, (T)1.);
     T bin_size_h = static_cast<T>(roi_height) / static_cast<T>(pooled_height);
     T bin_size_w = static_cast<T>(roi_width) / static_cast<T>(pooled_width);
 
@@ -203,22 +199,22 @@ bool RoIAlignRotatedGradientOp<float, CUDAContext>::RunOnDevice() {
   auto& R = Input(1); // RoIs
   auto& dY = Input(2); // Gradient of net w.r.t. output of "forward" op
                        // (aka "gradOutput")
+  auto* dX = Output(0); // Gradient of net w.r.t. input to "forward" op
+                        // (aka "gradInput")
 
-  auto* dX = Output(
-      0, X.sizes(), at::dtype<float>()); // Gradient of net w.r.t. input to
-                                         // "forward" op (aka "gradInput")
+  dX->ResizeLike(X);
 
   // Must zero-out dX before accumulating gradients
   math::Set<float, CUDAContext>(
-      dX->numel(), 0.f, dX->mutable_data<float>(), &context_);
+      dX->size(), 0.f, dX->mutable_data<float>(), &context_);
 
-  if (dY.numel() > 0) { // Handle possibly empty gradient if there were no rois
+  if (dY.size() > 0) { // Handle possibly empty gradient if there were no rois
     RoIAlignRotatedBackward<float>
-        <<<CAFFE_GET_BLOCKS(dY.numel()),
+        <<<CAFFE_GET_BLOCKS(dY.size()),
            CAFFE_CUDA_NUM_THREADS,
            0,
            context_.cuda_stream()>>>(
-            dY.numel(),
+            dY.size(),
             dY.data<float>(),
             R.dim32(0),
             spatial_scale_,
@@ -229,8 +225,7 @@ bool RoIAlignRotatedGradientOp<float, CUDAContext>::RunOnDevice() {
             pooled_width_,
             sampling_ratio_,
             dX->mutable_data<float>(),
-            R.data<float>(),
-            aligned_);
+            R.data<float>());
   }
   return true;
 }

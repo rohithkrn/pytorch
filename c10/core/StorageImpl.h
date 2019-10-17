@@ -2,6 +2,7 @@
 
 #include <c10/core/Allocator.h>
 #include <c10/core/ScalarType.h>
+#include <c10/core/ScalarTypeUtils.h>
 
 #include <c10/util/intrusive_ptr.h>
 
@@ -19,12 +20,7 @@ struct C10_API StorageImpl final : public c10::intrusive_ptr_target {
         data_ptr_(std::move(data_ptr)),
         numel_(numel),
         resizable_(resizable),
-        received_cuda_(false),
         allocator_(allocator) {
-    if (resizable) {
-      AT_ASSERTM(
-          allocator_, "For resizable storage, allocator must be provided");
-    }
     if (numel > 0) {
       if (data_type_.id() == caffe2::TypeIdentifier::uninitialized()) {
         AT_ERROR(
@@ -45,6 +41,13 @@ struct C10_API StorageImpl final : public c10::intrusive_ptr_target {
             allocator,
             resizable) {}
 
+  explicit StorageImpl(at::Device device)
+      : StorageImpl(device, caffe2::TypeMeta()) {}
+
+  StorageImpl(at::Device device, caffe2::TypeMeta data_type)
+      : StorageImpl(data_type, 0, at::DataPtr(nullptr, device), nullptr, true) {
+  }
+
   StorageImpl& operator=(StorageImpl&& other) = default;
   StorageImpl& operator=(const StorageImpl&) = delete;
   StorageImpl() = delete;
@@ -64,13 +67,15 @@ struct C10_API StorageImpl final : public c10::intrusive_ptr_target {
 
   template <typename T>
   inline T* data() const {
-    auto data_type = caffe2::TypeMeta::Make<T>();
-    if (dtype() != data_type) {
+    // TODO: This is bad: it means storage.data<T>() calls only work on
+    // T that are valid ScalarType.  FIXME!
+    auto data_type_T = at::scalarTypeToDataType(c10::CTypeToScalarType<T>::to());
+    if (dtype().id() != data_type_T) {
       AT_ERROR(
           "Attempt to access StorageImpl having data type ",
-          dtype(),
+          dtype().id(),
           " as data type ",
-          data_type);
+          data_type_T);
     }
     return unsafe_data<T>();
   }
@@ -166,10 +171,6 @@ struct C10_API StorageImpl final : public c10::intrusive_ptr_target {
   }
 
   void set_resizable(bool resizable) {
-    if (resizable) {
-      // We need an allocator to be resizable
-      AT_ASSERT(allocator_);
-    }
     resizable_ = resizable;
   }
 
@@ -207,18 +208,6 @@ struct C10_API StorageImpl final : public c10::intrusive_ptr_target {
     // capacity() might not return the value that was set here, if itemsize does
     // not evenly divide it.
     numel_ = capacity / data_type_.itemsize();
-    allocator_ = nullptr;
-    resizable_ = false;
-  }
-
-  // This method can be used only after storage construction and cannot be used
-  // to modify storage status
-  void set_received_cuda(bool received_cuda) {
-    received_cuda_ = received_cuda;
-  }
-
-  bool received_cuda() {
-    return received_cuda_;
   }
 
  private:
@@ -226,9 +215,6 @@ struct C10_API StorageImpl final : public c10::intrusive_ptr_target {
   DataPtr data_ptr_;
   int64_t numel_;
   bool resizable_;
-  // Identifies that Storage was received from another process and doesn't have
-  // local to process cuda memory allocation
-  bool received_cuda_;
   Allocator* allocator_;
 };
 } // namespace c10

@@ -9,9 +9,8 @@ template <typename T, class Context>
 class CAFFE2_API SparseNormalizeOp final : public Operator<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
-  template <class... Args>
-  explicit SparseNormalizeOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...),
+  SparseNormalizeOp(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<Context>(operator_def, ws),
         use_max_norm_(
             this->template GetSingleArgument<bool>("use_max_norm", true)),
         norm_(this->template GetSingleArgument<float>("norm", 1.0)) {
@@ -26,7 +25,7 @@ class CAFFE2_API SparseNormalizeOp final : public Operator<Context> {
  protected:
   bool use_max_norm_;
   float norm_;
-  INPUT_TAGS(PARAM, INDICES);
+  INPUT_TAGS(PARAM, INDICES, GRAD);
   OUTPUT_TAGS(OUTPUT_PARAM);
 };
 

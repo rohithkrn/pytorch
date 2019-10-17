@@ -10,9 +10,8 @@ template <class Context>
 class LengthsPadOp : public Operator<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
-  template <class... Args>
-  explicit LengthsPadOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...),
+  LengthsPadOp(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<Context>(operator_def, ws),
         OP_SINGLE_ARG(double, "padding_value", padding_value_, -1),
         OP_SINGLE_ARG(int, "target_length", target_length_, -1) {
     CAFFE_ENFORCE_GE(target_length_, 1, "target_length argument must be >= 1");

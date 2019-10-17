@@ -33,23 +33,23 @@ bool MarginRankingCriterionOp<CUDAContext>::RunOnDevice() {
   auto& X1 = Input(0);
   auto& X2 = Input(1);
   auto& Y = Input(2);
-
+  auto* loss = Output(0);
   CAFFE_ENFORCE(
-      X1.numel() == X2.numel(),
+      X1.size() == X2.size(),
       "The two inputs for computing ranking loss should have the same size.");
   CAFFE_ENFORCE(
-      X1.numel() == Y.numel(),
+      X1.size() == Y.size(),
       "The input and label should have the same size.");
-  auto* loss = Output(0, X1.sizes(), at::dtype<float>());
+  loss->ResizeLike(X1);
 
   const float* X1data = X1.data<float>();
   const float* X2data = X2.data<float>();
   const int* Ydata = Y.data<int>();
   float* output_data = loss->template mutable_data<float>();
 
-  MRCKernel<<<CAFFE_GET_BLOCKS(X1.numel()), CAFFE_CUDA_NUM_THREADS,
+  MRCKernel<<<CAFFE_GET_BLOCKS(X1.size()), CAFFE_CUDA_NUM_THREADS,
               0, context_.cuda_stream()>>>(
-      X1.numel(), Ydata, X1data, X2data, margin_, output_data);
+      X1.size(), Ydata, X1data, X2data, margin_, output_data);
   return true;
 }
 
@@ -59,9 +59,11 @@ bool MarginRankingCriterionGradientOp<CUDAContext>::RunOnDevice() {
   auto& X2 = Input(1);
   auto& Y = Input(2);
   auto& dOutput = Input(3);
+  auto* dX1 = Output(0);
+  auto* dX2 = Output(1);
 
-  auto* dX1 = Output(0, X1.sizes(), at::dtype<float>());
-  auto* dX2 = Output(1, X2.sizes(), at::dtype<float>());
+  dX1->ResizeLike(X1);
+  dX2->ResizeLike(X2);
 
   const float* X1data = X1.data<float>();
   const float* X2data = X2.data<float>();
@@ -70,9 +72,9 @@ bool MarginRankingCriterionGradientOp<CUDAContext>::RunOnDevice() {
 
   float* dX1_data = dX1->template mutable_data<float>();
   float* dX2_data = dX2->template mutable_data<float>();
-  MRCGradientKernel<<<CAFFE_GET_BLOCKS(X1.numel()), CAFFE_CUDA_NUM_THREADS,
+  MRCGradientKernel<<<CAFFE_GET_BLOCKS(X1.size()), CAFFE_CUDA_NUM_THREADS,
                       0, context_.cuda_stream()>>>(
-      X1.numel(), Ydata, X1data, X2data,
+      X1.size(), Ydata, X1data, X2data,
       dOutput_data, margin_, dX1_data, dX2_data);
   return true;
 }

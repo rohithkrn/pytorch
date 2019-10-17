@@ -12,7 +12,6 @@
 #define THCTypeIdxFloat  6
 #define THCTypeIdxDouble 7
 #define THCTypeIdxHalf   8
-#define THCTypeIdxBFloat16 9
 #define THCTypeIdx_(T) TH_CONCAT_2(THCTypeIdx,T)
 
 #include <THC/THCGenerateByteType.h>
@@ -23,7 +22,6 @@
 #include <THC/THCGenerateHalfType.h>
 #include <THC/THCGenerateFloatType.h>
 #include <THC/THCGenerateDoubleType.h>
-#include <THC/THCGenerateBFloat16Type.h>
 
 #undef THCTypeIdxByte
 #undef THCTypeIdxChar
@@ -33,7 +31,6 @@
 #undef THCTypeIdxFloat
 #undef THCTypeIdxDouble
 #undef THCTypeIdxHalf
-#undef THCTypeIdxBFloat16
 #undef THCTypeIdx_
 
 #undef THCGenerateAllTypes

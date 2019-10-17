@@ -1,11 +1,10 @@
 #include <Python.h>
 #include <torch/csrc/autograd/functions/accumulate_grad.h>
 #include <torch/csrc/autograd/functions/basic_ops.h>
-#include <torch/csrc/autograd/functions/pybind.h>
 #include <torch/csrc/autograd/functions/tensor.h>
-#include <torch/csrc/autograd/generated/python_functions.h>
+#include <torch/csrc/autograd/functions/pybind.h>
 #include <torch/csrc/autograd/python_cpp_function.h>
-#include <torch/csrc/distributed/autograd/functions/sendrpc_backward.h>
+#include <torch/csrc/autograd/generated/python_functions.h>
 #include <torch/csrc/jit/python_tracer.h>
 #include <torch/csrc/utils/pybind.h>
 #include <torch/csrc/utils/tuple_parser.h>
@@ -27,7 +26,7 @@ struct DelayedErrorCtor {
 };
 
 struct NoCtor {
-  Node* operator()(PyObject* args) {
+  Function* operator()(PyObject* args) {
     throw std::runtime_error("Cannot construct");
   }
 };
@@ -102,10 +101,6 @@ void THPAutograd_initFunctions()
 
   static PyTypeObject CopyBackwardsClass;
   addClass<CopyBackwards, NoCtor>(module, CopyBackwardsClass, "CopyBackwards");
-
-  static PyTypeObject SendRpcBackwardClass;
-  addClass<torch::distributed::autograd::SendRpcBackward, NoCtor>(
-      module, SendRpcBackwardClass, "SendRpcBackward");
 
   static PyTypeObject CopySlicesClass;
   addClass<CopySlices, NoCtor>(module, CopySlicesClass, "CopySlices");

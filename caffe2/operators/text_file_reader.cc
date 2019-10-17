@@ -38,9 +38,8 @@ struct TextFileReaderInstance {
 
 class CreateTextFileReaderOp : public Operator<CPUContext> {
  public:
-  template <class... Args>
-  explicit CreateTextFileReaderOp(Args&&... args)
-      : Operator<CPUContext>(std::forward<Args>(args)...),
+  CreateTextFileReaderOp(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<CPUContext>(operator_def, ws),
         filename_(GetSingleArgument<string>("filename", "")),
         numPasses_(GetSingleArgument<int>("num_passes", 1)),
         fieldTypes_(GetRepeatedArgument<int>("field_types")) {
@@ -87,9 +86,8 @@ inline void convert(
 
 class TextFileReaderReadOp : public Operator<CPUContext> {
  public:
-  template <class... Args>
-  explicit TextFileReaderReadOp(Args&&... args)
-      : Operator<CPUContext>(std::forward<Args>(args)...),
+  TextFileReaderReadOp(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<CPUContext>(operator_def, ws),
         batchSize_(GetSingleArgument<int>("batch_size", 1)) {}
 
   bool RunOnDevice() override {
@@ -169,7 +167,6 @@ REGISTER_CPU_OPERATOR(TextFileReaderRead, TextFileReaderReadOp);
 OPERATOR_SCHEMA(CreateTextFileReader)
     .NumInputs(0)
     .NumOutputs(1)
-    .ScalarType(TensorProto::UNDEFINED)
     .SetDoc("Create a text file reader. Fields are delimited by <TAB>.")
     .Arg("filename", "Path to the file.")
     .Arg("num_passes", "Number of passes over the file.")

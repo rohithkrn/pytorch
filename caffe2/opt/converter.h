@@ -62,7 +62,7 @@ C10_DECLARE_REGISTRY(ConverterRegistry, Converter);
   class opName##Converter : public Converter {                                \
     std::unique_ptr<nom::repr::NeuralNetOperator> convertToNeuralNetOperator( \
         const OperatorDef& op) override {                                     \
-      return nom::util::make_unique<nom::repr::opName>();                     \
+      return util::make_unique<repr::opName>();                               \
     }                                                                         \
     virtual ~opName##Converter() {}                                           \
   };

@@ -25,7 +25,7 @@ import os
 
 import torch
 try:
-    import torchvision  # noqa: F401
+    import torchvision
 except ImportError:
     import warnings
     warnings.warn('unable to load "torchvision" package')
@@ -59,7 +59,13 @@ extensions = [
 #
 #
 
-katex_prerender = True
+katex_options = r'''
+delimiters : [
+   {left: "$$", right: "$$", display: true},
+   {left: "\\(", right: "\\)", display: false},
+   {left: "\\[", right: "\\]", display: true}
+]
+'''
 
 napoleon_use_ivar = True
 
@@ -79,7 +85,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = 'PyTorch'
-copyright = '2019, Torch Contributors'
+copyright = '2018, Torch Contributors'
 author = 'Torch Contributors'
 
 # The version info for the project you're documenting, acts as replacement for
@@ -166,7 +172,7 @@ def setup(app):
 
     # In Sphinx 1.8 it was renamed to `add_css_file`, 1.7 and prior it is
     # `add_stylesheet` (deprecated in 1.8).
-    add_css = getattr(app, 'add_css_file', app.add_stylesheet)
+    add_css = getattr(app, 'add_css_file', getattr(app, 'add_stylesheet'))
     for css_file in html_css_files:
         add_css(css_file)
 
@@ -240,17 +246,6 @@ intersphinx_mapping = {
 from docutils import nodes
 from sphinx.util.docfields import TypedField
 from sphinx import addnodes
-import sphinx.ext.doctest
-
-# Without this, doctest adds any example with a `>>>` as a test
-doctest_test_doctest_blocks = ''
-doctest_default_flags = sphinx.ext.doctest.doctest.ELLIPSIS
-doctest_global_setup = '''
-try:
-    import torchvision
-except ImportError:
-    torchvision = None
-'''
 
 
 def patched_make_field(self, types, domain, items, **kw):

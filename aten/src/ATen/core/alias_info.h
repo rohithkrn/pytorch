@@ -5,22 +5,17 @@
 #include <c10/util/Exception.h>
 
 namespace c10 {
-/**
- * class AliasInfo
- *
- * Data structure to hold aliasing information for an `Argument`. They can be
- * nested to represent aliasing information on contained types.
- *
- * There is a `beforeSet` which describes the aliasing information before the
- * operator executes, and an `afterSet` that describes aliasing info
- * after execution.
- */
 class AliasInfo {
  public:
   // Symbol for the set that can alias anything
   static Symbol wildcardSet() {
     static const Symbol wc = Symbol::fromQualString("alias::*");
     return wc;
+  }
+  static AliasInfo createWildcard() {
+    AliasInfo ret;
+    ret.addSet(wildcardSet());
+    return ret;
   }
 
   void setIsWrite(bool isWrite) {
@@ -31,35 +26,39 @@ class AliasInfo {
     return isWrite_;
   }
 
-  void addBeforeSet(Symbol aliasSet) {
-    beforeSets_.insert(aliasSet);
+  void addSet(Symbol aliasSet) {
+    sets_.insert(aliasSet);
   }
 
-  void addAfterSet(Symbol aliasSet) {
-    afterSets_.insert(aliasSet);
+  const std::unordered_set<Symbol>& sets() const {
+    return sets_;
   }
 
-  const std::unordered_set<Symbol>& beforeSets() const {
-    return beforeSets_;
+  Symbol set() const {
+    AT_ASSERT(sets_.size() == 1);
+    return *sets_.begin();
   }
 
-  const std::unordered_set<Symbol>& afterSets() const {
-    return afterSets_;
+  bool isWildcard() const {
+    return sets_.count(wildcardSet()) != 0;
   }
 
-  Symbol beforeSet() const {
-    AT_ASSERT(beforeSets_.size() == 1);
-    return *beforeSets_.begin();
+  void unionWith(const AliasInfo& other) {
+    for (const auto& alias : other.sets()) {
+      sets_.insert(alias);
+    }
   }
 
-  bool isWildcardBefore() const {
-    return beforeSets_.count(wildcardSet()) != 0;
+  // TODO this doesn't check any contained types yet
+  // non-strict: returns true if self.sets() == other.sets()
+  bool isSubsetOf(const AliasInfo& other) const {
+    for (const auto& alias : this->sets()) {
+      if (other.sets().count(alias) == 0) {
+        return false;
+      }
+    }
+    return true;
   }
-
-  bool isWildcardAfter() const {
-    return afterSets_.count(wildcardSet()) != 0;
-  }
-
   // the alias info for the contained types of the type
   // e.g. if this is an annotation on List[T], `sets` refers to
   // the alias sets that the list may be in
@@ -73,24 +72,16 @@ class AliasInfo {
   }
 
  private:
-  std::unordered_set<Symbol> beforeSets_;
-  std::unordered_set<Symbol> afterSets_;
+  std::unordered_set<Symbol> sets_;
   std::vector<AliasInfo> containedTypes_;
   bool isWrite_ = false;
 };
 
-inline bool operator==(const AliasInfo& lhs, const AliasInfo& rhs) {
-  return lhs.isWrite() == rhs.isWrite()
-      && lhs.beforeSets() == rhs.beforeSets()
-      && lhs.afterSets() == rhs.afterSets()
-      && lhs.containedTypes() == rhs.containedTypes();
-}
-
-// this does match the way things are represented in the schema
+// DEBUG ONLY; this does not match the way things are represented in the schema
 inline std::ostream& operator<<(std::ostream& out, const AliasInfo& aliasInfo) {
   out << "(";
   bool first = true;
-  for (const auto& set : aliasInfo.beforeSets()) {
+  for (const auto& set : aliasInfo.sets()) {
     if (first) {
       first = false;
     } else {
@@ -98,22 +89,11 @@ inline std::ostream& operator<<(std::ostream& out, const AliasInfo& aliasInfo) {
     }
     out << set.toUnqualString();
   }
-  if (aliasInfo.isWrite()) {
-    out << "!";
-  }
-  if (aliasInfo.beforeSets() != aliasInfo.afterSets()) {
-    out << " -> ";
-    first = true;
-    for (const auto& set : aliasInfo.afterSets()) {
-      if (first) {
-        first = false;
-      } else {
-        out << "|";
-      }
-      out << set.toUnqualString();
-    }
-  }
   out << ")";
+
+  if (!aliasInfo.containedTypes().empty()) {
+    out << " CONTAINS " << aliasInfo.containedTypes()[0];
+  }
   return out;
 }
 } // namespace c10

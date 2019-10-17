@@ -36,9 +36,9 @@ class TORCH_API RMSprop : public Optimizer {
   template <typename ParameterContainer>
   explicit RMSprop(
       ParameterContainer&& parameters,
-      const RMSpropOptions& options_)
+      const RMSpropOptions& options)
       : Optimizer(std::forward<ParameterContainer>(parameters)),
-        options(options_) {}
+        options(options) {}
 
   void step() override;
 
@@ -56,9 +56,9 @@ class TORCH_API RMSprop : public Optimizer {
 
   template <typename Self, typename Archive>
   static void serialize(Self& self, Archive& archive) {
-    _TORCH_OPTIM_SERIALIZE(square_average_buffers);
-    _TORCH_OPTIM_SERIALIZE(momentum_buffers);
-    _TORCH_OPTIM_SERIALIZE(grad_average_buffers);
+    TORCH_OPTIM_SERIALIZE(square_average_buffers);
+    TORCH_OPTIM_SERIALIZE(momentum_buffers);
+    TORCH_OPTIM_SERIALIZE(grad_average_buffers);
   }
 };
 } // namespace optim

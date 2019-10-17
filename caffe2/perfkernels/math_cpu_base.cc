@@ -3,14 +3,9 @@
 // computation library to different compiler options (-mno-avx2 or -mavx2).
 
 #include <cfloat>
-#include <cmath>
-#include <cstdint>
 
 #include "common.h"
 #include "math.h"
-
-using std::uint64_t;
-using std::uint8_t;
 
 namespace caffe2 {
 
@@ -21,14 +16,14 @@ static constexpr double QEPSILON = 1e-8;
 void quantize_and_compress__base(
     const float* input_data,
     uint8_t* output_data,
-    uint64_t input_size,
-    uint64_t bitwidth,
+    size_t input_size,
+    size_t bitwidth,
     bool random,
     const float* random_buffer) {
-  uint64_t data_per_byte = 8 / bitwidth;
-  uint64_t tail = input_size % data_per_byte;
+  size_t data_per_byte = 8 / bitwidth;
+  size_t tail = input_size % data_per_byte;
   tail = tail ? data_per_byte - tail : 0;
-  uint64_t segment_size = (input_size + data_per_byte - 1) / data_per_byte;
+  size_t segment_size = (input_size + data_per_byte - 1) / data_per_byte;
 
   // basic info
   float minimum_element = INFINITY, maximum_element = -INFINITY;
@@ -46,11 +41,11 @@ void quantize_and_compress__base(
   float gap = (maximum_element - minimum_element) / ((1 << bitwidth) - 1.0f);
   float gap_inverse = 1. / (gap + QEPSILON);
   uint8_t max_q = (1 << bitwidth) - 1;
-  uint64_t bit_start = 0;
+  size_t bit_start = 0;
   if (random) {
     for (int start = 0; start < input_size; start += segment_size) {
-      uint64_t stride = start + segment_size <= input_size ? segment_size
-                                                           : input_size - start;
+      size_t stride = start + segment_size <= input_size ? segment_size
+                                                         : input_size - start;
       int i = 0;
       for (; i < stride; ++i) {
         float fval = input_data[start + i];
@@ -69,8 +64,8 @@ void quantize_and_compress__base(
     }
   } else {
     for (int start = 0; start < input_size; start += segment_size) {
-      uint64_t stride = start + segment_size <= input_size ? segment_size
-                                                           : input_size - start;
+      size_t stride = start + segment_size <= input_size ? segment_size
+                                                         : input_size - start;
       int i = 0;
       for (; i < stride; ++i) {
         float fval = input_data[start + i];
@@ -89,12 +84,11 @@ void quantize_and_compress__base(
   }
 }
 
-decltype(quantize_and_compress__base) quantize_and_compress__avx2;
 void quantize_and_compress(
     const float* input_data,
     uint8_t* output_data,
-    uint64_t input_size,
-    uint64_t bitwidth,
+    size_t input_size,
+    size_t bitwidth,
     bool random,
     const float* random_buffer) {
   AVX2_DO(
@@ -118,26 +112,26 @@ void quantize_and_compress(
 void decompress_and_dequantize__base(
     const uint8_t* input_data,
     float* output_data,
-    uint64_t input_size) {
+    size_t input_size) {
   // basic info
   const float minimum_element =
       reinterpret_cast<const float*>(input_data + 2)[0];
   const float maximum_element =
       reinterpret_cast<const float*>(input_data + 2)[1];
-  const uint64_t bitwidth = input_data[0];
+  const size_t bitwidth = input_data[0];
   const float gap =
       (maximum_element - minimum_element) / ((1 << bitwidth) - 1.f) +
       QEPSILON; // for exact recovering
 
-  const uint64_t tail = input_data[1];
+  const size_t tail = input_data[1];
 
-  const uint64_t output_size = (input_size - 10) * (8 / bitwidth) - tail;
+  const size_t output_size = (input_size - 10) * (8 / bitwidth) - tail;
   // decoding
-  uint64_t bit_start = 0;
-  const uint64_t segment_size = input_size - 10;
+  size_t bit_start = 0;
+  const size_t segment_size = input_size - 10;
   for (int start = 0; start < output_size; start += segment_size) {
-    uint64_t stride = start + segment_size <= output_size ? segment_size
-                                                          : output_size - start;
+    size_t stride = start + segment_size <= output_size ? segment_size
+                                                        : output_size - start;
     uint8_t mask = (1 << bitwidth) - 1;
     int i = 0;
     for (; i < stride; ++i) {
@@ -148,11 +142,10 @@ void decompress_and_dequantize__base(
   }
 }
 
-decltype(decompress_and_dequantize__base) decompress_and_dequantize__avx2;
 void decompress_and_dequantize(
     const uint8_t* input_data,
     float* output_data,
-    uint64_t input_size) {
+    size_t input_size) {
   AVX2_DO(decompress_and_dequantize, input_data, output_data, input_size);
   BASE_DO(decompress_and_dequantize, input_data, output_data, input_size);
 }

@@ -1,7 +1,6 @@
 #pragma once
 
 #include <torch/arg.h>
-#include <torch/detail/static.h>
 #include <torch/serialize/archive.h>
 #include <torch/types.h>
 
@@ -98,39 +97,33 @@ class ModuleHolder : torch::detail::ModuleHolderIndicator {
 
   /// Returns a shared pointer to the underlying module.
   const std::shared_ptr<Contained>& ptr() const {
-    TORCH_CHECK(!is_empty(), "Accessing empty ModuleHolder");
+    AT_CHECK(!is_empty(), "Accessing empty ModuleHolder");
     return impl_;
   }
 
   /// Returns a pointer to the underlying module.
   Contained* get() {
-    TORCH_CHECK(!is_empty(), "Accessing empty ModuleHolder");
+    AT_CHECK(!is_empty(), "Accessing empty ModuleHolder");
     return impl_.get();
   }
 
   /// Returns a const pointer to the underlying module.
   const Contained* get() const {
-    TORCH_CHECK(!is_empty(), "Accessing empty ModuleHolder");
+    AT_CHECK(!is_empty(), "Accessing empty ModuleHolder");
     return impl_.get();
   }
 
-  /// Calls the `forward()` method of the contained module.
+  /// Forwards to the call operator of the contained module.
   template <typename... Args>
   auto operator()(Args&&... args)
-      -> torch::detail::return_type_of_forward_t<Contained, Args...> {
-    // This will not compile if the module does not have a `forward()` method
-    // (as expected).
-    // NOTE: `std::forward` is qualified to prevent VS2017 emitting
-    // error C2872: 'std': ambiguous symbol
-    return impl_->forward(::std::forward<Args>(args)...);
+      -> decltype((*impl_)(std::forward<Args>(args)...)) {
+    return (*impl_)(std::forward<Args>(args)...);
   }
 
   /// Forwards to the subscript operator of the contained module.
-  /// NOTE: std::forward is qualified to prevent VS2017 emitting
-  ///       error C2872: 'std': ambiguous symbol
   template <typename Arg>
-  auto operator[](Arg&& arg) -> decltype((*impl_)[::std::forward<Arg>(arg)]) {
-    return (*impl_)[::std::forward<Arg>(arg)];
+  auto operator[](Arg&& arg) -> decltype((*impl_)[std::forward<Arg>(arg)]) {
+    return (*impl_)[std::forward<Arg>(arg)];
   }
 
   /// Returns true if the `ModuleHolder` does not contain a module.
@@ -162,14 +155,6 @@ class ModuleHolder : torch::detail::ModuleHolderIndicator {
     return nullptr;
   }
 };
-
-/// Pretty prints the given `Module` into the `ostream`.
-template <typename ModuleType>
-std::ostream& operator<<(
-    std::ostream& stream,
-    const nn::ModuleHolder<ModuleType>& module) {
-  return stream << *module;
-}
 
 /// Serializes a `ModuleHolder` into an `OutputArchive`.
 template <typename ModuleType>

@@ -127,6 +127,3 @@ __global__ void THCTensor_kernel_scanInnermostDim(T *tgt_, T *src_,
 
 #include <THC/generic/THCTensorMathScan.cu>
 #include <THC/THCGenerateAllTypes.h>
-
-#include <THC/generic/THCTensorMathScan.cu>
-#include <THC/THCGenerateBoolType.h>

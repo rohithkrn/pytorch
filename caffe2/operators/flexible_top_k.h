@@ -14,9 +14,8 @@ class FlexibleTopKOp : public Operator<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
 
-  template <class... Args>
-  explicit FlexibleTopKOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...) {}
+  FlexibleTopKOp(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<Context>(operator_def, ws) {}
 
   bool RunOnDevice() override;
 };
@@ -26,9 +25,8 @@ class FlexibleTopKGradientOp : public Operator<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
 
-  template <class... Args>
-  explicit FlexibleTopKGradientOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...) {}
+  FlexibleTopKGradientOp(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<Context>(operator_def, ws) {}
 
   bool RunOnDevice() override;
 };

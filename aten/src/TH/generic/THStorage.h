@@ -2,8 +2,10 @@
 #define TH_GENERIC_FILE "TH/generic/THStorage.h"
 #else
 
-#include <c10/core/Allocator.h>
+#ifdef __cplusplus
+#include <ATen/Allocator.h>
 #include <c10/core/StorageImpl.h>
+#endif
 
 /* on pourrait avoir un liste chainee
    qui initialise math, lab structures (or more).
@@ -21,7 +23,12 @@
 
 // Struct definition is moved to THStorage.hpp (so this file stays C compatible)
 
+#ifdef __cplusplus
 #define THStorage at::StorageImpl
+#else
+typedef struct at_Storage_Impl at_Storage_Impl;
+#define THStorage at_Storage_Impl
+#endif
 
 // These used to be distinct types; for some measure of backwards compatibility and documentation
 // alias these to the single THStorage type.
@@ -33,8 +40,6 @@
 #define THShortStorage THStorage
 #define THIntStorage THStorage
 #define THLongStorage THStorage
-#define THBoolStorage THStorage
-#define THBFloat16Storage THStorage
 
 TH_API scalar_t* THStorage_(data)(const THStorage*);
 TH_API ptrdiff_t THStorage_(size)(const THStorage*);
@@ -53,9 +58,11 @@ TH_API THStorage* THStorage_(newWithSize4)(scalar_t, scalar_t, scalar_t, scalar_
 TH_API THStorage* THStorage_(newWithMapping)(const char *filename, ptrdiff_t size, int flags);
 
 TH_API THStorage* THStorage_(newWithAllocator)(ptrdiff_t size,
-                                               c10::Allocator* allocator);
+                                               THAllocator* allocator);
+#ifdef __cplusplus
 TH_API THStorage* THStorage_(newWithDataAndAllocator)(
     at::DataPtr&& data, ptrdiff_t size, at::Allocator* allocator);
+#endif
 
 /* should not differ with API */
 TH_API void THStorage_(setFlag)(THStorage *storage, const char flag);

@@ -1,10 +1,8 @@
 #pragma once
 
-#include <ATen/core/ivalue.h>
+#include <torch/csrc/jit/graph_executor.h>
 #include <torch/csrc/jit/ir.h>
-#include <memory>
-#include <string>
-#include <vector>
+#include <torch/csrc/jit/operator.h>
 
 namespace torch {
 namespace jit {

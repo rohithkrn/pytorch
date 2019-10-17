@@ -65,58 +65,32 @@ def is_travis():
     return 'TRAVIS' in os.environ
 
 
-#  "min_satisfying_examples" setting has been deprecated in hypythesis
-#  3.56.0 and removed in hypothesis 4.x
-if hypothesis.version.__version_info__ >= (3, 56, 0):
-    hypothesis.settings.register_profile(
-        "sandcastle",
-        hypothesis.settings(
-            derandomize=True,
-            suppress_health_check=[hypothesis.HealthCheck.too_slow],
-            database=None,
-            max_examples=100,
-            verbosity=hypothesis.Verbosity.verbose))
-    hypothesis.settings.register_profile(
-        "dev",
-        hypothesis.settings(
-            suppress_health_check=[hypothesis.HealthCheck.too_slow],
-            database=None,
-            max_examples=10,
-            verbosity=hypothesis.Verbosity.verbose))
-    hypothesis.settings.register_profile(
-        "debug",
-        hypothesis.settings(
-            suppress_health_check=[hypothesis.HealthCheck.too_slow],
-            database=None,
-            max_examples=1000,
-            verbosity=hypothesis.Verbosity.verbose))
-else:
-    hypothesis.settings.register_profile(
-        "sandcastle",
-        hypothesis.settings(
-            derandomize=True,
-            suppress_health_check=[hypothesis.HealthCheck.too_slow],
-            database=None,
-            max_examples=100,
-            min_satisfying_examples=1,
-            verbosity=hypothesis.Verbosity.verbose))
-    hypothesis.settings.register_profile(
-        "dev",
-        hypothesis.settings(
-            suppress_health_check=[hypothesis.HealthCheck.too_slow],
-            database=None,
-            max_examples=10,
-            min_satisfying_examples=1,
-            verbosity=hypothesis.Verbosity.verbose))
-    hypothesis.settings.register_profile(
-        "debug",
-        hypothesis.settings(
-            suppress_health_check=[hypothesis.HealthCheck.too_slow],
-            database=None,
-            max_examples=1000,
-            min_satisfying_examples=1,
-            verbosity=hypothesis.Verbosity.verbose))
+hypothesis.settings.register_profile(
+    "sandcastle",
+    hypothesis.settings(
+        derandomize=True,
+        suppress_health_check=[hypothesis.HealthCheck.too_slow],
+        database=None,
+        min_satisfying_examples=1,
+        max_examples=100,
+        verbosity=hypothesis.Verbosity.verbose))
 
+hypothesis.settings.register_profile(
+    "dev",
+    hypothesis.settings(
+        suppress_health_check=[hypothesis.HealthCheck.too_slow],
+        database=None,
+        max_examples=10,
+        min_satisfying_examples=1,
+        verbosity=hypothesis.Verbosity.verbose))
+hypothesis.settings.register_profile(
+    "debug",
+    hypothesis.settings(
+        suppress_health_check=[hypothesis.HealthCheck.too_slow],
+        database=None,
+        max_examples=1000,
+        min_satisfying_examples=1,
+        verbosity=hypothesis.Verbosity.verbose))
 hypothesis.settings.load_profile(
     'sandcastle' if is_sandcastle() else os.getenv('CAFFE2_HYPOTHESIS_PROFILE',
                                                    'dev')
@@ -277,12 +251,11 @@ def tensors1d(n, min_len=1, max_len=64, dtype=np.float32, elements=None):
 
 
 cpu_do = caffe2_pb2.DeviceOption()
-cuda_do = caffe2_pb2.DeviceOption(device_type=caffe2_pb2.CUDA)
+gpu_do = caffe2_pb2.DeviceOption(device_type=caffe2_pb2.CUDA)
 hip_do = caffe2_pb2.DeviceOption(device_type=caffe2_pb2.HIP)
-gpu_do =  caffe2_pb2.DeviceOption(device_type=workspace.GpuDeviceType) # CUDA or ROCm
 # (bddppq) Do not rely on this no_hip option! It's just used to
 # temporarily skip some flaky tests on ROCM before it's getting more mature.
-_device_options_no_hip = [cpu_do] + ([cuda_do] if workspace.has_cuda_support else [])
+_device_options_no_hip = [cpu_do] + ([gpu_do] if workspace.has_gpu_support else [])
 device_options = _device_options_no_hip + ([hip_do] if workspace.has_hip_support else [])
 
 # Include device option for each GPU
@@ -305,8 +278,7 @@ gcs = dict(
 )
 
 gcs_cpu_only = dict(gc=st.sampled_from([cpu_do]), dc=st.just([cpu_do]))
-gcs_cuda_only = dict(gc=st.sampled_from([cuda_do]), dc=st.just([cuda_do]))
-gcs_gpu_only = dict(gc=st.sampled_from([gpu_do]), dc=st.just([gpu_do])) # CUDA or ROCm
+gcs_gpu_only = dict(gc=st.sampled_from([gpu_do]), dc=st.just([gpu_do]))
 gcs_no_hip = dict(gc=st.sampled_from(_device_options_no_hip), dc=st.just(_device_options_no_hip))
 
 
@@ -510,12 +482,7 @@ class HypothesisTestCase(test_util.TestCase):
                     np.testing.assert_allclose(indices, ref_indices,
                                                atol=1e-4, rtol=1e-4)
 
-    def _assertInferTensorChecks(self, name, shapes, types, output,
-                                 ensure_output_is_inferred=False):
-        self.assertTrue(
-            not ensure_output_is_inferred or (name in shapes),
-            'Shape for {0} was not inferred'.format(name))
-
+    def _assertInferTensorChecks(self, name, shapes, types, output):
         if name not in shapes:
             # No inferred shape or type available
             return
@@ -570,7 +537,6 @@ class HypothesisTestCase(test_util.TestCase):
         grad_reference=None,
         atol=None,
         outputs_to_check=None,
-        ensure_outputs_are_inferred=False,
     ):
         """
         This runs the reference Python function implementation
@@ -649,8 +615,7 @@ class HypothesisTestCase(test_util.TestCase):
                     )
                 if test_shape_inference:
                     self._assertInferTensorChecks(
-                        output_blob_name, shapes, types, output,
-                        ensure_output_is_inferred=ensure_outputs_are_inferred)
+                        output_blob_name, shapes, types, output)
                 outs.append(output)
             if grad_reference is not None:
                 assert output_to_grad is not None, \

@@ -12,14 +12,10 @@ namespace caffe2 {
 template <typename T, class Context>
 class LambdaRankNdcgOp final : public Operator<Context> {
  public:
-  template <class... Args>
-  explicit LambdaRankNdcgOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...),
+  LambdaRankNdcgOp(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<Context>(operator_def, ws),
         use_ndcg_as_loss_(
             this->template GetSingleArgument<bool>("use_ndcg_as_loss", false)),
-        use_idcg_normalization_(this->template GetSingleArgument<bool>(
-            "use_idcg_normalization",
-            true)),
         use_exp_gain_(
             this->template GetSingleArgument<bool>("use_exp_gain", true)) {}
   USE_OPERATOR_CONTEXT_FUNCTIONS;
@@ -38,14 +34,13 @@ class LambdaRankNdcgOp final : public Operator<Context> {
       const Tensor& r,
       Tensor** dy);
   bool use_ndcg_as_loss_;
-  bool use_idcg_normalization_;
   bool use_exp_gain_;
-  Tensor gain_;
-  Tensor discount_;
-  Tensor rank_idx_;
-  Tensor ideal_idx_;
-  Tensor lambda_;
-  Tensor inv_log_i_;
+  Tensor gain_{Context::GetDeviceType()};
+  Tensor discount_{Context::GetDeviceType()};
+  Tensor rank_idx_{Context::GetDeviceType()};
+  Tensor ideal_idx_{Context::GetDeviceType()};
+  Tensor lambda_{Context::GetDeviceType()};
+  Tensor inv_log_i_{Context::GetDeviceType()};
 };
 
 template <typename T, class Context>

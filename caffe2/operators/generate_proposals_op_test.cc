@@ -4,7 +4,9 @@
 #include "caffe2/core/flags.h"
 #include "caffe2/core/macros.h"
 
-#include "caffe2/operators/generate_proposals_op_util_boxes.h"
+#ifdef CAFFE2_USE_OPENCV
+#include <opencv2/opencv.hpp>
+#endif // CAFFE2_USE_OPENCV
 
 namespace caffe2 {
 
@@ -140,6 +142,22 @@ TEST(GenerateProposalsTest, TestComputeSortedAnchors) {
   }
 }
 
+namespace {
+
+template <class Derived>
+ERMatXf boxes_xyxy_to_xywh(const Eigen::MatrixBase<Derived>& boxes) {
+  CAFFE_ENFORCE_EQ(boxes.cols(), 4);
+  ERMatXf res(boxes.rows(), 4);
+  auto ones = ERMatXf::Constant(boxes.rows(), 1, 1.0);
+  res.col(0) = (boxes.col(0) + boxes.col(2)) / 2.0; // ctr_x = (x1 + x2)/2
+  res.col(1) = (boxes.col(1) + boxes.col(3)) / 2.0; // ctr_y = (y1 + y2)/2
+  res.col(2) = boxes.col(2) - boxes.col(0) + ones; // w = x2 - x1 + 1
+  res.col(3) = boxes.col(3) - boxes.col(1) + ones; // h = y2 - y1 + 1
+  return res;
+}
+
+} // namespace
+
 TEST(GenerateProposalsTest, TestComputeAllAnchorsRotated) {
   // Similar to TestComputeAllAnchors but for rotated boxes with angle info.
   ERMatXf anchors_xyxy(3, 4);
@@ -147,8 +165,7 @@ TEST(GenerateProposalsTest, TestComputeAllAnchorsRotated) {
 
   // Convert to RRPN format and add angles
   ERMatXf anchors(3, 5);
-  anchors.block(0, 0, 3, 4) = utils::bbox_xyxy_to_ctrwh(
-      anchors_xyxy.array(), true /* legacy_plus_one */);
+  anchors.block(0, 0, 3, 4) = boxes_xyxy_to_xywh(anchors_xyxy);
   std::vector<float> angles{0.0, 45.0, -120.0};
   for (int i = 0; i < anchors.rows(); ++i) {
     anchors(i, 4) = angles[i % angles.size()];
@@ -171,8 +188,7 @@ TEST(GenerateProposalsTest, TestComputeAllAnchorsRotated) {
 
   // Convert gt to RRPN format and add angles
   ERMatXf all_anchors_gt(36, 5);
-  all_anchors_gt.block(0, 0, 36, 4) = utils::bbox_xyxy_to_ctrwh(
-      all_anchors_gt_xyxy.array(), true /* legacy_plus_one */);
+  all_anchors_gt.block(0, 0, 36, 4) = boxes_xyxy_to_xywh(all_anchors_gt_xyxy);
   for (int i = 0; i < all_anchors_gt.rows(); ++i) {
     all_anchors_gt(i, 4) = angles[i % angles.size()];
   }
@@ -197,8 +213,7 @@ TEST(GenerateProposalsTest, TestComputeSortedAnchorsRotated) {
 
   // Convert to RRPN format and add angles
   ERMatXf anchors(3, 5);
-  anchors.block(0, 0, 3, 4) = utils::bbox_xyxy_to_ctrwh(
-      anchors_xyxy.array(), true /* legacy_plus_one */);
+  anchors.block(0, 0, 3, 4) = boxes_xyxy_to_xywh(anchors_xyxy);
   std::vector<float> angles{0.0, 45.0, -120.0};
   for (int i = 0; i < anchors.rows(); ++i) {
     anchors(i, 4) = angles[i % angles.size()];
@@ -415,12 +430,12 @@ TEST(GenerateProposalsTest, TestRealDownSampled) {
       1e-4);
 }
 
+#if defined(CV_MAJOR_VERSION) && (CV_MAJOR_VERSION >= 3)
 TEST(GenerateProposalsTest, TestRealDownSampledRotatedAngle0) {
   // Similar to TestRealDownSampled but for rotated boxes with angle info.
-  const float angle = 0;
-  const float delta_angle = 0;
-  const float clip_angle_thresh = 1.0;
-  const int box_dim = 5;
+  float angle = 0;
+  float delta_angle = 0;
+  float clip_angle_thresh = 1.0;
 
   Workspace ws;
   OperatorDef def;
@@ -493,7 +508,7 @@ TEST(GenerateProposalsTest, TestRealDownSampledRotatedAngle0) {
   // Add angle in bbox deltas
   int num_boxes = scores.size();
   CHECK_EQ(bbx.size() / 4, num_boxes);
-  vector<float> bbx_with_angle(num_boxes * box_dim);
+  vector<float> bbx_with_angle(num_boxes * 5);
   // bbx (deltas) is in shape (A * 4, H, W). Insert angle delta
   // at each spatial location for each anchor.
   int i = 0, j = 0;
@@ -520,14 +535,13 @@ TEST(GenerateProposalsTest, TestRealDownSampledRotatedAngle0) {
       45.0336, 0, 0, 23.09477997f, 50.61448669f, 59, 0, 0, 39.52141571f,
       51.44710541f, 59, 0, 23.57396317f, 29.98791885f, 79, 59, 0, 0,
       41.90219116f, 79, 59, 0, 0, 23.30098343f, 78.2413f, 58.7287f;
-  ERMatXf rois_gt(rois_gt_xyxy.rows(), 6);
+  ERMatXf rois_gt(9, 6);
   // Batch ID
   rois_gt.block(0, 0, rois_gt.rows(), 1) =
-      rois_gt_xyxy.block(0, 0, rois_gt.rows(), 1);
+      ERMatXf::Constant(rois_gt.rows(), 1, 0.0);
   // rois_gt in [x_ctr, y_ctr, w, h] format
-  rois_gt.block(0, 1, rois_gt.rows(), 4) = utils::bbox_xyxy_to_ctrwh(
-      rois_gt_xyxy.block(0, 1, rois_gt.rows(), 4).array(),
-      true /* legacy_plus_one */);
+  rois_gt.block(0, 1, rois_gt.rows(), 4) =
+      boxes_xyxy_to_xywh(rois_gt_xyxy.block(0, 1, rois_gt.rows(), 4));
   // Angle
   rois_gt.block(0, 5, rois_gt.rows(), 1) =
       ERMatXf::Constant(rois_gt.rows(), 1, angle);
@@ -543,12 +557,12 @@ TEST(GenerateProposalsTest, TestRealDownSampledRotatedAngle0) {
 
   AddInput(vector<int64_t>{img_count, A, H, W}, scores, "scores", &ws);
   AddInput(
-      vector<int64_t>{img_count, box_dim * A, H, W},
+      vector<int64_t>{img_count, 5 * A, H, W},
       bbx_with_angle,
       "bbox_deltas",
       &ws);
   AddInput(vector<int64_t>{img_count, 3}, im_info, "im_info", &ws);
-  AddInput(vector<int64_t>{A, box_dim}, anchors, "anchors", &ws);
+  AddInput(vector<int64_t>{A, 5}, anchors, "anchors", &ws);
 
   def.add_arg()->CopyFrom(MakeArgument("spatial_scale", 1.0f / 16.0f));
   def.add_arg()->CopyFrom(MakeArgument("pre_nms_topN", 6000));
@@ -589,11 +603,10 @@ TEST(GenerateProposalsTest, TestRealDownSampledRotatedAngle0) {
 
 TEST(GenerateProposalsTest, TestRealDownSampledRotated) {
   // Similar to TestRealDownSampled but for rotated boxes with angle info.
-  const float angle = 45.0;
-  const float delta_angle = 0.174533; // 0.174533 radians -> 10 degrees
-  const float expected_angle = 55.0;
-  const float clip_angle_thresh = 1.0;
-  const int box_dim = 5;
+  float angle = 45.0;
+  float delta_angle = 0.174533; // 0.174533 radians -> 10 degrees
+  float expected_angle = 55.0;
+  float clip_angle_thresh = 1.0;
 
   Workspace ws;
   OperatorDef def;
@@ -666,7 +679,7 @@ TEST(GenerateProposalsTest, TestRealDownSampledRotated) {
   // Add angle in bbox deltas
   int num_boxes = scores.size();
   CHECK_EQ(bbx.size() / 4, num_boxes);
-  vector<float> bbx_with_angle(num_boxes * box_dim);
+  vector<float> bbx_with_angle(num_boxes * 5);
   // bbx (deltas) is in shape (A * 4, H, W). Insert angle delta
   // at each spatial location for each anchor.
   {
@@ -687,12 +700,12 @@ TEST(GenerateProposalsTest, TestRealDownSampledRotated) {
 
   AddInput(vector<int64_t>{img_count, A, H, W}, scores, "scores", &ws);
   AddInput(
-      vector<int64_t>{img_count, box_dim * A, H, W},
+      vector<int64_t>{img_count, 5 * A, H, W},
       bbx_with_angle,
       "bbox_deltas",
       &ws);
   AddInput(vector<int64_t>{img_count, 3}, im_info, "im_info", &ws);
-  AddInput(vector<int64_t>{A, box_dim}, anchors, "anchors", &ws);
+  AddInput(vector<int64_t>{A, 5}, anchors, "anchors", &ws);
 
   def.add_arg()->CopyFrom(MakeArgument("spatial_scale", 1.0f / 16.0f));
   def.add_arg()->CopyFrom(MakeArgument("pre_nms_topN", 6000));
@@ -723,5 +736,6 @@ TEST(GenerateProposalsTest, TestRealDownSampledRotated) {
     EXPECT_LE(std::abs(rois_data(i, 5) - expected_angle), 1e-4);
   }
 }
+#endif // CV_MAJOR_VERSION >= 3
 
 } // namespace caffe2

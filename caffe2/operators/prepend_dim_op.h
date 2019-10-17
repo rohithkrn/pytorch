@@ -13,9 +13,8 @@ template <class Context>
 class PrependDimOp : public Operator<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
-  template <class... Args>
-  explicit PrependDimOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...),
+  PrependDimOp(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<Context>(operator_def, ws),
         dim_size_(this->template GetSingleArgument<int64_t>("dim_size", 0)) {
     CAFFE_ENFORCE_GT(
         dim_size_, 0, "Argument dim_size must be greater than zero.");
@@ -58,9 +57,8 @@ template <class Context>
 class MergeDimOp : public Operator<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
-  template <class... Args>
-  explicit MergeDimOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...) {}
+  MergeDimOp(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<Context>(operator_def, ws) {}
 
   bool RunOnDevice() override {
     auto& input = Input(0);

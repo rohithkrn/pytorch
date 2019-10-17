@@ -77,8 +77,7 @@ __global__ void RoIAlignForward(
     const int sampling_ratio,
     const T* bottom_rois,
     int roi_cols,
-    T* top_data,
-    bool continuous_coordinate) {
+    T* top_data) {
   CUDA_1D_KERNEL_LOOP(index, nthreads) {
     // (n, c, ph, pw) is an element in the pooled output
     int pw = index % pooled_width;
@@ -95,19 +94,18 @@ __global__ void RoIAlignForward(
     }
 
     // Do not using rounding; this implementation detail is critical
-    T roi_offset = continuous_coordinate ? T(0.5) : 0;
-    T roi_start_w = offset_bottom_rois[0] * spatial_scale - roi_offset;
-    T roi_start_h = offset_bottom_rois[1] * spatial_scale - roi_offset;
-    T roi_end_w = offset_bottom_rois[2] * spatial_scale - roi_offset;
-    T roi_end_h = offset_bottom_rois[3] * spatial_scale - roi_offset;
+    T roi_start_w = offset_bottom_rois[0] * spatial_scale;
+    T roi_start_h = offset_bottom_rois[1] * spatial_scale;
+    T roi_end_w = offset_bottom_rois[2] * spatial_scale;
+    T roi_end_h = offset_bottom_rois[3] * spatial_scale;
+    // T roi_start_w = roundf(offset_bottom_rois[0] * spatial_scale);
+    // T roi_start_h = roundf(offset_bottom_rois[1] * spatial_scale);
+    // T roi_end_w = roundf(offset_bottom_rois[2] * spatial_scale);
+    // T roi_end_h = roundf(offset_bottom_rois[3] * spatial_scale);
 
-    T roi_width = roi_end_w - roi_start_w;
-    T roi_height = roi_end_h - roi_start_h;
-    if (!continuous_coordinate) { // backward compatiblity
-      // Force malformed ROIs to be 1x1
-      roi_width = c10::cuda::compat::max(roi_width, (T)1.);
-      roi_height = c10::cuda::compat::max(roi_height, (T)1.);
-    }
+    // Force malformed ROIs to be 1x1
+    T roi_width = c10::cuda::compat::max(roi_end_w - roi_start_w, (T)1.);
+    T roi_height = c10::cuda::compat::max(roi_end_h - roi_start_h, (T)1.);
     T bin_size_h = static_cast<T>(roi_height) / static_cast<T>(pooled_height);
     T bin_size_w = static_cast<T>(roi_width) / static_cast<T>(pooled_width);
 
@@ -152,22 +150,20 @@ template <>
 bool RoIAlignOp<float, CUDAContext>::RunOnDevice() {
   auto& X = Input(0); // Input data to pool
   auto& R = Input(1); // RoIs
-                      // RoI pooled data
+  auto* Y = Output(0); // RoI pooled data
 
-  if (R.numel() == 0) {
+  if (R.size() == 0) {
     // Handle empty rois
-    Output(
-        0, {0, X.dim32(1), pooled_height_, pooled_width_}, at::dtype<float>());
+    Y->Resize(0, X.dim32(1), pooled_height_, pooled_width_);
+    // The following mutable_data calls are needed to allocate the tensors
+    Y->template mutable_data<float>();
     return true;
   }
 
   assert(sampling_ratio_ >= 0);
 
-  auto* Y = Output(
-      0,
-      {R.dim32(0), X.dim32(1), pooled_height_, pooled_width_},
-      at::dtype<float>());
-  int output_size = Y->numel();
+  Y->Resize(R.dim32(0), X.dim32(1), pooled_height_, pooled_width_);
+  int output_size = Y->size();
   RoIAlignForward<float>
       <<<CAFFE_GET_BLOCKS(output_size),
          CAFFE_CUDA_NUM_THREADS,
@@ -184,14 +180,9 @@ bool RoIAlignOp<float, CUDAContext>::RunOnDevice() {
           sampling_ratio_,
           R.data<float>(),
           R.dim32(1),
-          Y->mutable_data<float>(),
-          aligned_);
+          Y->mutable_data<float>());
   return true;
 }
 
 REGISTER_CUDA_OPERATOR(RoIAlign, RoIAlignOp<float, CUDAContext>);
 } // namespace caffe2
-
-using RoIAlignOpFloatCUDA = caffe2::RoIAlignOp<float, caffe2::CUDAContext>;
-
-C10_EXPORT_CAFFE2_OP_TO_C10_CUDA(RoIAlign, RoIAlignOpFloatCUDA);

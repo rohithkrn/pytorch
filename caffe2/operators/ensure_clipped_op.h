@@ -11,9 +11,8 @@ class EnsureClippedOp final : public Operator<Context> {
  public:
   USE_OPERATOR_CONTEXT_FUNCTIONS;
 
-  template <class... Args>
-  explicit EnsureClippedOp(Args&&... args)
-      : Operator<Context>(std::forward<Args>(args)...),
+  EnsureClippedOp(const OperatorDef& operator_def, Workspace* ws)
+      : Operator<Context>(operator_def, ws),
         min_(std::numeric_limits<T>::lowest()),
         max_(std::numeric_limits<T>::max()) {
     if (HasArgument("min")) {

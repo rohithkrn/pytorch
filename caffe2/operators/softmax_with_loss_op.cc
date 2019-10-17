@@ -1,8 +1,5 @@
-#include "caffe2/operators/softmax_with_loss_op.h"
-
-#include <vector>
-
-#include "caffe2/operators/softmax_utils.h"
+#include "softmax_with_loss_op.h"
+#include "softmax_shared.h"
 
 namespace caffe2 {
 
@@ -14,29 +11,29 @@ REGISTER_CPU_OPERATOR(
 // Input: X (logits), T (labels); Output: P (probs), Y
 OPERATOR_SCHEMA(SoftmaxWithLoss)
     .NumInputs(2, 3)
-    .NumOutputs({2, 3})
-    .TensorInferenceFunction([](const OperatorDef& def,
-                                const vector<TensorShape>& in) {
-      ArgumentHelper helper(def);
-      auto axis = helper.GetSingleArgument<int32_t>("axis", 1);
+    .NumOutputs(2)
+    .TensorInferenceFunction(
+        [](const OperatorDef& def, const vector<TensorShape>& in) {
+          ArgumentHelper helper(def);
+          auto axis = helper.GetSingleArgument<int32_t>("axis", 1);
 
-      vector<TensorShape> out(2);
+          vector<TensorShape> out(2);
 
-      auto logits = in[0]; // Tensor with Shape [batch_size, num_classes]
-      auto labels = in[1]; // Tensor with shape [batch_size, ]
-      const auto canonical_axis =
-          canonical_axis_index_(axis, logits.dims().size());
-      const int batch_size =
-          size_to_dim_(canonical_axis, GetDimsVector(logits));
-      const int num_classes =
-          size_from_dim_(canonical_axis, GetDimsVector(logits));
+          auto logits = in[0]; // Tensor with Shape [batch_size, num_classes]
+          auto labels = in[1]; // Tensor with shape [batch_size, ]
+          const auto canonical_axis =
+              canonical_axis_index_(axis, logits.dims().size());
+          const int batch_size =
+              size_to_dim_(canonical_axis, GetDimsVector(logits));
+          const int num_classes =
+              size_from_dim_(canonical_axis, GetDimsVector(logits));
 
-      out[0].set_data_type(logits.data_type());
-      out[0].add_dims(batch_size);
-      out[0].add_dims(num_classes);
+          out[0].set_data_type(logits.data_type());
+          out[0].add_dims(batch_size);
+          out[0].add_dims(num_classes);
 
-      return out;
-    })
+          return out;
+        })
     .SetDoc(R"DOC(
 Combined Softmax and Cross-Entropy loss operator. The operator first computes the softmax normalized values for each layer in the batch of the given input, then computes cross-entropy loss. This operator is numerically more stable than separate `Softmax` and `CrossEntropy` ops. The inputs are a 2-D tensor `logits` of size (batch_size x input_feature_dimensions), which represents the unscaled log probabilities, and a 1-dimensional integer `labels` tensor for ground truth. An optional third input blob (`weight_tensor`) can be used to weight the samples for the loss, which is useful if the training set is unbalanced. This operator outputs a `softmax` tensor which contains the probability for each label for each example (same shape is `logits` input), and a scalar `loss` value, which is the averaged cross-entropy loss between the softmax probabilities and the ground truth values. Use parameter `label_prob`=1 to enable inputting labels as a probability distribution.
 
@@ -135,18 +132,10 @@ avgloss: 10.667433
 </details>
 
 )DOC")
-    .Arg(
-        "label_prob",
-        "*(type: int; default: 0)* Setting to 1 enables inputting labels as probability distribution.")
-    .Arg(
-        "axis",
-        "*(type: int; default: 1)* Axis of the inputs when coerced to 2D.")
-    .Arg(
-        "scale",
-        "*(type: float)* Average loss output scaling factor (must be >= 0).")
-    .Arg(
-        "order",
-        "*(type: string; default: 'NCHW')* Order of blob dimensions (only 'NCHW' is supported currently).")
+    .Arg("label_prob","*(type: int; default: 0)* Setting to 1 enables inputting labels as probability distribution.")
+    .Arg("axis","*(type: int; default: 1)* Axis of the inputs when coerced to 2D.")
+    .Arg("scale","*(type: float)* Average loss output scaling factor (must be >= 0).")
+    .Arg("order","*(type: string; default: 'NCHW')* Order of blob dimensions (only 'NCHW' is supported currently).")
     .Input(0, "logits", "*(type: Tensor`<float>`)* Input tensor.")
     .Input(1, "labels", "*(type: Tensor`<float>`)* Ground truth label tensor.")
     .Input(
@@ -167,7 +156,7 @@ bool SoftmaxWithLossOp<float, CPUContext>::RunOnDevice() {
   auto& T = Input(1); // Labels / targets
 
   const auto canonical_axis = X.canonical_axis_index(axis_);
-  int64_t N, D;
+  int N, D;
   N = X.size_to_dim(canonical_axis); // batch size
   D = X.size_from_dim(canonical_axis);
   auto* P =
@@ -189,20 +178,25 @@ bool SoftmaxWithLossOp<float, CPUContext>::RunOnDevice() {
     }
   }
 
-  if (!losses_.defined()) {
-    losses_ = caffe2::empty({N}, at::dtype<float>().device(CPU));
-  } else if (losses_.numel() != N) {
-    losses_.Resize(N);
+  if (sum_multiplier_.numel() != D) {
+    sum_multiplier_.Resize(D);
+    math::Set<float, CPUContext>(
+        D, 1.f, sum_multiplier_.mutable_data<float>(), &context_);
   }
 
-  softmax_utils::SoftmaxCPU<float>(
+  rowmax_.Resize(N);
+  losses_.Resize(N);
+
+  SoftmaxCPU(
+      context_,
       N,
       D,
-      !label_prob_mode_,
       X.data<float>(),
       Pdata,
       losses_.mutable_data<float>(),
-      &context_);
+      sum_multiplier_.data<float>(),
+      !label_prob_mode_,
+      rowmax_.mutable_data<float>());
 
   // Then compute cross entropy
   float loss_sum = 0.0;
@@ -377,5 +371,5 @@ class GetSoftmaxWithLossGradient : public GradientMakerBase {
 };
 
 REGISTER_GRADIENT(SoftmaxWithLoss, GetSoftmaxWithLossGradient);
-} // namespace
+}
 } // namespace caffe2

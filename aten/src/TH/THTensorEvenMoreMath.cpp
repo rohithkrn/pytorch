@@ -5,12 +5,3 @@
 
 #include <TH/generic/THTensorEvenMoreMath.cpp>
 #include <TH/THGenerateAllTypes.h>
-
-#include <TH/generic/THTensorEvenMoreMath.cpp>
-#include <TH/THGenerateBoolType.h>
-
-#include <TH/generic/THTensorEvenMoreMath.cpp>
-#include <TH/THGenerateHalfType.h>
-
-#include <TH/generic/THTensorEvenMoreMath.cpp>
-#include <TH/THGenerateBFloat16Type.h>

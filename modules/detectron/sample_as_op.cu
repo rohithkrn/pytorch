@@ -21,7 +21,7 @@ Y's output samples are the samples of X for which L > 0.
 #include <cfloat>
 
 #include "caffe2/core/context_gpu.h"
-#include "modules/detectron/sample_as_op.h"
+#include "sample_as_op.h"
 
 #include <stdio.h>
 
@@ -31,6 +31,7 @@ template <>
 bool SampleAsOp<float, CUDAContext>::RunOnDevice() {
   auto& X = Input(0); // Input data to be sliced
   auto& L = Input(1); // Target data that provide the identity
+  auto* Y = Output(0); // Sliced data (Y.dim32(0) = num of (L > 0))
 
   CAFFE_ENFORCE(
       X.dim32(0) == L.dim32(0),
@@ -57,9 +58,9 @@ bool SampleAsOp<float, CUDAContext>::RunOnDevice() {
   assert(count > 0);
 
   // resize Y
-  vector<int64_t> out_shape(X.sizes().vec());
+  vector<int64_t> out_shape(X.dims().vec());
   out_shape[0] = count;
-  auto* Y = Output(0, out_shape, at::dtype<float>()); // Sliced data (Y.dim32(0) = num of (L > 0))
+  Y->Resize(out_shape);
 
   const int len = X.size() / X.dim32(0);
 
@@ -80,9 +81,9 @@ bool SampleAsGradientOp<float, CUDAContext>::RunOnDevice() {
   auto& X = Input(0);
   auto& L = Input(1);
   auto& dY = Input(2);
+  auto* dX = Output(0);
 
-
-  auto* dX = Output(0, X.sizes(), at::dtype<float>());
+  dX->ResizeLike(X);
 
   // copy L to CPU:
   std::vector<int> labels(L.dim32(0));

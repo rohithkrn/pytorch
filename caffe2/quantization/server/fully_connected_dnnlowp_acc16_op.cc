@@ -4,8 +4,8 @@
 
 #include "fbgemm_pack_op.h"
 
-C10_DECLARE_int32(caffe2_dnnlowp_nbits_in_non_outlier);
-C10_DECLARE_int32(caffe2_dnnlowp_copy_to_32bit_frequency);
+C10_DECLARE_int32(dnnlowp_nbits_in_non_outlier);
+C10_DECLARE_int32(dnnlowp_copy_to_32bit_frequency);
 
 namespace caffe2 {
 
@@ -13,12 +13,12 @@ FullyConnectedDNNLowPAcc16Op::FullyConnectedDNNLowPAcc16Op(
     const OperatorDef& operator_def,
     Workspace* ws)
     : FullyConnectedDNNLowPOp<uint8_t>(operator_def, ws),
-      nbits_in_non_outlier_(this->template GetSingleArgument<int>(
+      nbits_in_non_outlier_(OperatorBase::GetSingleArgument<int>(
           "nbits_in_non_outlier",
-          FLAGS_caffe2_dnnlowp_nbits_in_non_outlier)),
-      copy_to_32bit_frequency_(this->template GetSingleArgument<int>(
+          FLAGS_dnnlowp_nbits_in_non_outlier)),
+      copy_to_32bit_frequency_(OperatorBase::GetSingleArgument<int>(
           "copy_to_32bit_frequency",
-          FLAGS_caffe2_dnnlowp_copy_to_32bit_frequency)) {}
+          FLAGS_dnnlowp_copy_to_32bit_frequency)) {}
 
 bool FullyConnectedDNNLowPAcc16Op::RunOnDevice() {
   using namespace std;
@@ -44,11 +44,6 @@ bool FullyConnectedDNNLowPAcc16Op::RunOnDevice() {
   vector<uint8_t> X_temp;
   const uint8_t* Xdata =
       QuantizeInputIfNeeded<uint8_t>(this, 0, in_qparams_[0], X_temp);
-
-  if (this->quantize_channelwise_) {
-    LOG(WARNING) << "FC with 16-bit accumulation doesn't work with per-channel "
-                    "quantization yet.";
-  }
 
   // Pack W if needed
   if (!Wq_acc16_packed_ || !is_weight_constant_) {
@@ -82,7 +77,7 @@ bool FullyConnectedDNNLowPAcc16Op::RunOnDevice() {
         int outlier_cnt = Wq_outlier_->ColPtr()[N];
 
         LOG(INFO) << "Proportion of outlier for FC layer with weight blob "
-                  << this->debug_def().input(1) << " is "
+                  << OperatorBase::debug_def().input(1) << " is "
                   << (float)outlier_cnt / W_quantized_.size();
 
         LOG(INFO) << "copy_to_32bit_frequency " << copy_to_32bit_frequency_;
@@ -119,7 +114,6 @@ bool FullyConnectedDNNLowPAcc16Op::RunOnDevice() {
     this->row_offsets_.resize(row_offset_size_per_thread);
     this->X_pack_buf_.resize(x_pack_buf_size_per_thread);
 
-    // TODO: use PackAMatrix if filter_qparams_[0].zero_point == 0
     PackAWithRowOffset<uint8_t, int16_t> packA(
         matrix_op_t::NoTranspose,
         M,
@@ -134,12 +128,12 @@ bool FullyConnectedDNNLowPAcc16Op::RunOnDevice() {
       DoNothing<> doNothingObj{};
       ReQuantizeOutput<false /* fuse relu */> reqObj(
           doNothingObj,
-          this->requantization_multipliers_.data(),
+          &requantization_params_.real_multiplier,
           out_qparams_.zero_point,
-          column_offsets_->empty() ? 0 : in_qparams_[0].zero_point,
-          this->filter_zero_points_.data(),
+          in_qparams_[0].zero_point,
+          &in_qparams_[1].zero_point,
           packA.getRowOffsetBuffer(),
-          column_offsets_->empty() ? nullptr : column_offsets_->data(),
+          column_offsets_->data(),
           this->b_quantized_data_,
           N); // ncols per quant group
 
@@ -175,11 +169,11 @@ bool FullyConnectedDNNLowPAcc16Op::RunOnDevice() {
       ReQuantizeForFloat<false /* FUSE_RELU*/> reqObj(
           doNothingObj,
           in_qparams_[0].scale,
-          this->filter_scales_.data(),
-          column_offsets_->empty() ? 0 : in_qparams_[0].zero_point,
-          this->filter_zero_points_.data(),
+          &in_qparams_[1].scale,
+          in_qparams_[0].zero_point,
+          &in_qparams_[1].zero_point,
           packA.getRowOffsetBuffer(),
-          column_offsets_->empty() ? nullptr : column_offsets_->data(),
+          column_offsets_->data(),
           this->b_dequantized_data_,
           N); // ncols per quant group
 
@@ -225,17 +219,13 @@ bool FullyConnectedDNNLowPAcc16Op::RunOnDevice() {
         for (int k = 0; k < K; ++k) {
           row_offset += Xdata[i * K + k];
         }
+        row_offset *= in_qparams_[1].zero_point;
 
         for (int j = 0; j < N; ++j) {
-          int quant_group = this->quantize_channelwise_ ? j : 0;
           Y_int32_[i * N + j] -=
-              row_offset * this->filter_qparams_[quant_group].zero_point;
-          if (!column_offsets_->empty()) {
-            Y_int32_[i * N + j] -=
-                in_qparams_[0].zero_point * (*column_offsets_)[j];
-          }
+              in_qparams_[0].zero_point * (*column_offsets_)[j] + row_offset;
           Ydata_float[i * N + j] = Y_int32_[i * N + j] * in_qparams_[0].scale *
-                  in_qparams_[quant_group].scale +
+                  in_qparams_[1].scale +
               b_dequantized_data_[j];
         }
       }
@@ -254,12 +244,12 @@ bool FullyConnectedDNNLowPAcc16Op::RunOnDevice() {
             N,
             Y_int32_.data() + i * N,
             Ydata + i * N,
-            this->requantization_multipliers_.data(),
+            &requantization_params_.real_multiplier,
             out_qparams_.zero_point,
-            column_offsets_->empty() ? 0 : in_qparams_[0].zero_point,
-            this->filter_zero_points_.data(),
+            in_qparams_[0].zero_point,
+            &in_qparams_[1].zero_point,
             &row_offset,
-            column_offsets_->empty() ? nullptr : column_offsets_->data(),
+            column_offsets_->data(),
             b_quantized_->data(),
             N); // ncols per quant group
       }
