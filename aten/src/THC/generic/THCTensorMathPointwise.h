@@ -13,7 +13,7 @@ THC_API void THCTensor_(cminValue)(THCState *state, THCTensor *self, THCTensor *
 
 #if !defined(THC_REAL_IS_BOOL)
 
-#if defined(THC_REAL_IS_FLOAT) || defined(THC_REAL_IS_DOUBLE) || defined(THC_REAL_IS_HALF)
+#if defined(THC_REAL_IS_FLOAT) || defined(THC_REAL_IS_DOUBLE) || defined(THC_REAL_IS_HALF) || defined(THC_REAL_IS_BFLOAT16)
 
 THC_API void THCTensor_(sigmoid)(THCState *state, THCTensor *self, THCTensor *src);
 THC_API void THCTensor_(log1p)(THCState *state, THCTensor *self, THCTensor *src);
