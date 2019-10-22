@@ -207,7 +207,6 @@ struct THCNumerics<at::BFloat16> {
   static inline __host__ __device__ at::BFloat16 mul(at::BFloat16 a, at::BFloat16 b) { return a * b; }
   static inline __host__ __device__ at::BFloat16 sub(at::BFloat16 a, at::BFloat16 b) { return a - b; }
   static inline __host__ __device__ at::BFloat16 pow(at::BFloat16 a, at::BFloat16 b) { return ::pow(a, b); }
-  static inline __host__ __device__ at::BFloat16 atan2(at::BFloat16 a, at::BFloat16 b) { return ::atan2(a, b); }
   static inline __host__ __device__ at::BFloat16 exp(at::BFloat16 a) { return std::exp(a); }
   static inline __host__ __device__ at::BFloat16 exp10(at::BFloat16 a) { return ::exp10(a); }
   static inline __host__ __device__ at::BFloat16 log(at::BFloat16 a) { return ::log(a); }

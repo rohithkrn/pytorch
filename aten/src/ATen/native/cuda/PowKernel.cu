@@ -29,7 +29,7 @@ static inline __host__ __device__ T sqrt(T x) {
 
 void pow_tensor_tensor_kernel(TensorIterator& iter) {
   if (isFloatingType(iter.dtype())) {
-    AT_DISPATCH_FLOATING_TYPES_AND_HALF(iter.dtype(), "pow_cuda", [&]() {
+    AT_DISPATCH_FLOATING_TYPES_AND2(kHalf, kBFloat16, iter.dtype(), "pow_cuda", [&]() {
       gpu_kernel(iter, []GPU_LAMBDA(scalar_t base, scalar_t exp) -> scalar_t {
         return std::pow(base, exp);
       });
@@ -80,7 +80,7 @@ void pow_tensor_scalar_kernel_impl(TensorIterator& iter,
 
 void pow_tensor_scalar_kernel(TensorIterator& iter, Scalar exp_scalar) {
   if (isFloatingType(iter.dtype()) || exp_scalar.isIntegral(false)) {
-    AT_DISPATCH_ALL_TYPES_AND(kHalf, iter.dtype(), "pow_cuda", [&]() {
+    AT_DISPATCH_ALL_TYPES_AND2(kHalf, kBFloat16, iter.dtype(), "pow_cuda", [&]() {
       const auto exp = exp_scalar.to<scalar_t>();
       pow_tensor_scalar_kernel_impl<scalar_t>(iter, exp);
     });

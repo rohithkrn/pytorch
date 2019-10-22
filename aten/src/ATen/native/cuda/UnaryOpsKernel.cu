@@ -24,16 +24,16 @@ void bitwise_not_kernel_cuda(TensorIterator& iter) {
 }
 
 void logical_not_kernel_cuda(TensorIterator& iter) {
-  AT_DISPATCH_ALL_TYPES_AND2(kBool, kHalf, iter.dtype(1), "logical_not_cuda", [&]() {
+  AT_DISPATCH_ALL_TYPES_AND3(kBool, kHalf, kBFloat16, iter.dtype(1), "logical_not_cuda", [&]() {
     using self_t = scalar_t;
-    AT_DISPATCH_ALL_TYPES_AND2(kBool, kHalf, iter.dtype(0), "logical_not_cuda", [&]() {
+    AT_DISPATCH_ALL_TYPES_AND3(kBool, kHalf, kBFloat16, iter.dtype(0), "logical_not_cuda", [&]() {
       gpu_kernel(iter, []GPU_LAMBDA(self_t a) -> scalar_t { return static_cast<scalar_t>(!a); });
     });
   });
 }
 
 void ceil_kernel_cuda(TensorIterator& iter) {
-  AT_DISPATCH_FLOATING_TYPES_AND_HALF(iter.dtype(), "ceil_cuda", [&]() {
+  AT_DISPATCH_FLOATING_TYPES_AND2(kHalf, kBFloat16, iter.dtype(), "ceil_cuda", [&]() {
     gpu_kernel(iter, []GPU_LAMBDA(scalar_t a) -> scalar_t {
       return std::ceil(a);
     });
@@ -41,7 +41,7 @@ void ceil_kernel_cuda(TensorIterator& iter) {
 }
 
 void expm1_kernel_cuda(TensorIterator& iter) {
-  AT_DISPATCH_FLOATING_TYPES_AND_HALF(iter.dtype(), "expm1_cuda", [&]() {
+  AT_DISPATCH_FLOATING_TYPES_AND2(kHalf, kBFloat16, iter.dtype(), "expm1_cuda", [&]() {
     gpu_kernel(iter, []GPU_LAMBDA(scalar_t a) -> scalar_t {
       return ::expm1(a);
     });
@@ -50,7 +50,7 @@ void expm1_kernel_cuda(TensorIterator& iter) {
 
 
 void floor_kernel_cuda(TensorIterator& iter) {
-  AT_DISPATCH_FLOATING_TYPES_AND_HALF(iter.dtype(), "floor_cuda", [&]() {
+  AT_DISPATCH_FLOATING_TYPES_AND2(kHalf, kBFloat16, iter.dtype(), "floor_cuda", [&]() {
     gpu_kernel(iter, []GPU_LAMBDA(scalar_t a) -> scalar_t {
       return std::floor(a);
     });
@@ -58,7 +58,7 @@ void floor_kernel_cuda(TensorIterator& iter) {
 }
 
 void log_kernel_cuda(TensorIterator& iter) {
-  AT_DISPATCH_FLOATING_TYPES_AND_HALF(iter.dtype(), "log_cuda", [&]() {
+  AT_DISPATCH_FLOATING_TYPES_AND2(kHalf, kBFloat16, iter.dtype(), "log_cuda", [&]() {
     gpu_kernel(iter, []GPU_LAMBDA(scalar_t a) -> scalar_t {
       return std::log(a);
     });
@@ -66,7 +66,7 @@ void log_kernel_cuda(TensorIterator& iter) {
 }
 
 void log10_kernel_cuda(TensorIterator& iter) {
-  AT_DISPATCH_FLOATING_TYPES_AND_HALF(iter.dtype(), "log10_cuda", [&]() {
+  AT_DISPATCH_FLOATING_TYPES_AND2(kHalf, kBFloat16, iter.dtype(), "log10_cuda", [&]() {
     gpu_kernel(iter, []GPU_LAMBDA(scalar_t a) -> scalar_t {
       return ::log10(a);
     });
@@ -74,7 +74,7 @@ void log10_kernel_cuda(TensorIterator& iter) {
 }
 
 void log2_kernel_cuda(TensorIterator& iter) {
-  AT_DISPATCH_FLOATING_TYPES_AND_HALF(iter.dtype(), "log2_cuda", [&]() {
+  AT_DISPATCH_FLOATING_TYPES_AND2(kHalf, kBFloat16, iter.dtype(), "log2_cuda", [&]() {
     gpu_kernel(iter, []GPU_LAMBDA(scalar_t a) -> scalar_t {
       return ::log2(a);
     });
@@ -82,7 +82,7 @@ void log2_kernel_cuda(TensorIterator& iter) {
 }
 
 void neg_kernel_cuda(TensorIterator& iter) {
-  AT_DISPATCH_ALL_TYPES_AND(ScalarType::Half, iter.dtype(), "neg_cuda", [&]() {
+  AT_DISPATCH_ALL_TYPES_AND2(ScalarType::Half, ScalarType::BFloat16, iter.dtype(), "neg_cuda", [&]() {
     gpu_kernel(iter, []GPU_LAMBDA(scalar_t a) -> scalar_t {
       return -a;
     });
@@ -100,7 +100,7 @@ __host__ __device__ static inline double nearbyint_wrapper(double a) {
 }
 
 void round_kernel_cuda(TensorIterator& iter) {
-  AT_DISPATCH_FLOATING_TYPES_AND_HALF(iter.dtype(), "round_cuda", [&]() {
+  AT_DISPATCH_FLOATING_TYPES_AND2(kHalf, kBFloat16, iter.dtype(), "round_cuda", [&]() {
     gpu_kernel(iter, []GPU_LAMBDA(scalar_t a) -> scalar_t {
       // We do not use std::round because we would like to round midway numbers to the nearest even integer.
       return nearbyint_wrapper(a);
@@ -119,7 +119,7 @@ __host__ __device__ static inline double trunc_wrapper(double a) {
 }
 
 void trunc_kernel_cuda(TensorIterator& iter) {
-  AT_DISPATCH_FLOATING_TYPES_AND_HALF(iter.dtype(), "trunc_cuda", [&]() {
+  AT_DISPATCH_FLOATING_TYPES_AND2(kHalf, kBFloat16, iter.dtype(), "trunc_cuda", [&]() {
     gpu_kernel(iter, []GPU_LAMBDA(scalar_t a) -> scalar_t {
       return trunc_wrapper(a);
     });
@@ -127,7 +127,7 @@ void trunc_kernel_cuda(TensorIterator& iter) {
 }
 
 void rsqrt_kernel_cuda(TensorIterator& iter) {
-  AT_DISPATCH_FLOATING_TYPES_AND_HALF(iter.dtype(), "rsqrt_cuda", [&]() {
+  AT_DISPATCH_FLOATING_TYPES_AND2(kHalf, kBFloat16, iter.dtype(), "rsqrt_cuda", [&]() {
     gpu_kernel(iter, []GPU_LAMBDA(scalar_t a) -> scalar_t {
       // In CUDA, ::rsqrt is overloaded for float and at::Half here is implicitly cast to float.
       return ::rsqrt(a);
@@ -141,7 +141,7 @@ void sign_kernel_cuda(TensorIterator& iter){
         return a;
       });
     } else {
-      AT_DISPATCH_ALL_TYPES_AND(ScalarType::Half, iter.dtype(), "sign_cuda", [&]() {
+      AT_DISPATCH_ALL_TYPES_AND(ScalarType::Half, ScalarType::BFloat16, iter.dtype(), "sign_cuda", [&]() {
           gpu_kernel(iter, []GPU_LAMBDA(scalar_t a) -> scalar_t {
               scalar_t zero = scalar_t(0);
               return (zero < a) - (a < zero);
@@ -151,7 +151,7 @@ void sign_kernel_cuda(TensorIterator& iter){
 }
 
 void erfinv_kernel_cuda(TensorIterator& iter) {
-  AT_DISPATCH_FLOATING_TYPES_AND_HALF(iter.dtype(), "erfinv_cuda", [&]() {
+  AT_DISPATCH_FLOATING_TYPES_AND2(kHalf, kBFloat16, iter.dtype(), "erfinv_cuda", [&]() {
     gpu_kernel(iter, []GPU_LAMBDA(scalar_t a) -> scalar_t {
       return ::erfinv(a);
     });
@@ -159,7 +159,7 @@ void erfinv_kernel_cuda(TensorIterator& iter) {
 }
 
 void digamma_kernel_cuda(TensorIterator& iter) {
-  AT_DISPATCH_FLOATING_TYPES_AND_HALF(iter.dtype(), "digamma_cuda", [&]() {
+  AT_DISPATCH_FLOATING_TYPES_AND2(kHalf, kBFloat16, iter.dtype(), "digamma_cuda", [&]() {
     gpu_kernel(iter, []GPU_LAMBDA(scalar_t a) -> scalar_t {
       return calc_digamma(a);
     });
@@ -167,7 +167,7 @@ void digamma_kernel_cuda(TensorIterator& iter) {
 }
 
 void trigamma_kernel_cuda(TensorIterator& iter) {
-  AT_DISPATCH_FLOATING_TYPES_AND_HALF(iter.dtype(), "trigamma_cuda", [&]() {
+  AT_DISPATCH_FLOATING_TYPES_AND2(kHalf, kBFloat16, iter.dtype(), "trigamma_cuda", [&]() {
     gpu_kernel(iter, []GPU_LAMBDA(scalar_t a) -> scalar_t {
       return calc_trigamma(a);
     });
@@ -183,7 +183,7 @@ void polygamma_kernel_cuda(TensorIterator& iter, int64_t n) {
 }
 
 void lgamma_kernel_cuda(TensorIterator& iter) {
-  AT_DISPATCH_FLOATING_TYPES_AND_HALF(iter.dtype(), "lgamma_cuda", [&]() {
+  AT_DISPATCH_FLOATING_TYPES_AND2(kHalf, kBFloat16, iter.dtype(), "lgamma_cuda", [&]() {
     gpu_kernel(iter, []GPU_LAMBDA(scalar_t a) -> scalar_t {
       return ::lgamma(a);
     });
