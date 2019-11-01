@@ -12,8 +12,8 @@
     forward_scalar_types: ['Float', 'Double', 'Half']
     backward_scalar_types: ['Float', 'Double', 'Half']
   CUDA:
-    forward_scalar_types: ['Float', 'Double', 'Half']
-    backward_scalar_types: ['Float', 'Double', 'Half']
+    forward_scalar_types: ['Float', 'Double', 'Half', 'BFloat16']
+    backward_scalar_types: ['Float', 'Double', 'Half', 'BFloat16']
 
 - name: _thnn_l1_loss(Tensor self, Tensor target, int64_t reduction)
   cname: AbsCriterion
@@ -26,6 +26,9 @@
   scalar_check:
     output: 'false'
     grad_input: 'false'
+  CUDA:
+    forward_scalar_types: ['Float', 'Double', 'Half', 'BFloat16']
+    backward_scalar_types: ['Float', 'Double', 'Half', 'BFloat16']
 
 - name: _thnn_multi_margin_loss(Tensor self, LongTensor target, Scalar p, Scalar margin, Tensor? weight, int64_t reduction)
   cname: MultiMarginCriterion
@@ -46,6 +49,9 @@
     output: reduction != at::Reduction::None || self_->dim() == 0
     total_weight: 'true'
   CPU:
+    forward_scalar_types: ['Float', 'Double', 'Half', 'BFloat16']
+    backward_scalar_types: ['Float', 'Double', 'Half', 'BFloat16']
+  CUDA:
     forward_scalar_types: ['Float', 'Double', 'Half', 'BFloat16']
     backward_scalar_types: ['Float', 'Double', 'Half', 'BFloat16']
 
@@ -130,6 +136,9 @@
   scalar_check:
     output: 'false'
     grad_input: 'false'
+  CUDA:
+    forward_scalar_types: ['Float', 'Double', 'Half', 'BFloat16']
+    backward_scalar_types: ['Float', 'Double', 'Half', 'BFloat16']
 
 - name: _thnn_tanh(Tensor self)
   cname: Tanh
