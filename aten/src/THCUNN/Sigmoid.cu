@@ -21,3 +21,6 @@ struct sigmoid_updateGradInput_functor<half> {
 
 #include <THCUNN/generic/Sigmoid.cu>
 #include <THC/THCGenerateFloatTypes.h>
+
+#include <THCUNN/generic/Sigmoid.cu>
+#include <THC/THCGenerateBFloat16Type.h>
