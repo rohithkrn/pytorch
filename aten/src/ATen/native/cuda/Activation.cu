@@ -68,7 +68,7 @@ Tensor prelu_cuda(const Tensor& self, const Tensor& weight_) {
 
   // case1: shared weight for all channels
   if (weight_num == 1) {
-    AT_DISPATCH_FLOATING_TYPES_AND_HALF(input.scalar_type(), "prelu_cuda", [&] {
+    AT_DISPATCH_FLOATING_TYPES_AND2(kHalf, kBFloat16, input.scalar_type(), "prelu_cuda", [&] {
       prelu_cuda_kernel_share_weights<scalar_t>(
         input,
         result,
@@ -100,7 +100,7 @@ Tensor prelu_cuda(const Tensor& self, const Tensor& weight_) {
     cudaStream_t stream = at::cuda::getCurrentCUDAStream(curDevice);
     TORCH_CHECK(cuda::getApplyGrid(input_numel, grid, curDevice), "prelu: input too large or too many dimensions");
 
-    AT_DISPATCH_FLOATING_TYPES_AND_HALF(input.scalar_type(), "prelu_cuda", [&] {
+    AT_DISPATCH_FLOATING_TYPES_AND2(kHalf, kBFloat16, input.scalar_type(), "prelu_cuda", [&] {
       prelu_cuda_kernel_multi_weights<scalar_t>
       <<<grid, block, 0, stream>>>(
         result.data_ptr<scalar_t>(),
@@ -181,7 +181,7 @@ std::tuple<Tensor, Tensor> prelu_backward_cuda(const Tensor& grad_out_, const Te
   Tensor weight_grad_collector = at::empty_like(input);
   // case1: shared parameter for all channels
   if (weight_num == 1) {
-    AT_DISPATCH_FLOATING_TYPES_AND_HALF(input.scalar_type(), "prelu_backward_cuda", [&] {
+    AT_DISPATCH_FLOATING_TYPES_AND2(kHalf, kBFloat16, input.scalar_type(), "prelu_backward_cuda", [&] {
       prelu_cuda_backward_kernel_share_weights<scalar_t>(
         input,
         grad_out,
@@ -216,7 +216,7 @@ std::tuple<Tensor, Tensor> prelu_backward_cuda(const Tensor& grad_out_, const Te
     cudaStream_t stream = at::cuda::getCurrentCUDAStream(curDevice);
     TORCH_CHECK(cuda::getApplyGrid(input_numel, grid, curDevice), "prelu_backward_cuda: input too large or too many dimensions");
 
-    AT_DISPATCH_FLOATING_TYPES_AND_HALF(input.scalar_type(), "prelu_backward_cuda", [&] {
+    AT_DISPATCH_FLOATING_TYPES_AND2(kHalf, kBFloat16, input.scalar_type(), "prelu_backward_cuda", [&] {
       prelu_cuda_backward_kernel_multi_weights<scalar_t>
       <<<grid, block, 0, stream>>>(
         input.data_ptr<scalar_t>(),
@@ -270,7 +270,7 @@ void hardshrink_backward_cuda_kernel(const Tensor& self, Tensor& out_tensor, sca
 
 Tensor hardshrink_cuda(const Tensor & self, Scalar lambd) {
   auto out_tensor = at::empty_like(self);
-  AT_DISPATCH_FLOATING_TYPES_AND_HALF(self.scalar_type(), "hardshrink_cuda", [&] {
+  AT_DISPATCH_FLOATING_TYPES_AND2(kHalf, kBFloat16, self.scalar_type(), "hardshrink_cuda", [&] {
     hardshrink_cuda_kernel<scalar_t>(self, out_tensor, lambd.to<scalar_t>());
   });
   return out_tensor;
@@ -278,7 +278,7 @@ Tensor hardshrink_cuda(const Tensor & self, Scalar lambd) {
 
 Tensor hardshrink_backward_cuda(const Tensor & grad, const Tensor & self, Scalar lambd) {
   auto out_tensor = at::empty_like(grad);
-  AT_DISPATCH_FLOATING_TYPES_AND_HALF(self.scalar_type(), "hardshrink_backward_cuda", [&] {
+  AT_DISPATCH_FLOATING_TYPES_AND2(kHalf, kBFloat16, self.scalar_type(), "hardshrink_backward_cuda", [&] {
     hardshrink_backward_cuda_kernel<scalar_t>(self, out_tensor, lambd.to<scalar_t>(), grad);
   });
   return out_tensor;
@@ -292,7 +292,7 @@ void threshold_kernel_impl(TensorIterator& iter, scalar_t threshold, scalar_t va
 }
 
 static void threshold_kernel(TensorIterator& iter, Scalar threshold, Scalar value) {
-  AT_DISPATCH_ALL_TYPES_AND(at::ScalarType::Half, iter.dtype(), "threshold_cuda", [&] {
+  AT_DISPATCH_ALL_TYPES_AND2(at::ScalarType::Half, at::ScalarType::BFloat16, iter.dtype(), "threshold_cuda", [&] {
     threshold_kernel_impl<scalar_t>(iter, threshold.to<scalar_t>(), value.to<scalar_t>());
   });
 }
