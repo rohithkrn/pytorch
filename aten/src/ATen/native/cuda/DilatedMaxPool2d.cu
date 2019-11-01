@@ -197,7 +197,7 @@ void max_pool2d_with_indices_out_cuda_template(
   const int num_threads = std::min(at::cuda::getCurrentDeviceProperties()->maxThreadsPerBlock,
                                    BACKWARD_THREADS);
 
-  AT_DISPATCH_FLOATING_TYPES_AND_HALF(input.scalar_type(),
+  AT_DISPATCH_FLOATING_TYPES_AND2(kHalf, kBFloat16, input.scalar_type(),
     "max_pool2d_with_indices_out_cuda_frame",
     [&] {
       using accscalar_t = acc_type<scalar_t, true>;
@@ -304,7 +304,7 @@ void max_pool2d_with_indices_backward_out_cuda_template(
   if (maxGridY < grid.y) grid.y = maxGridY;
   if (maxGridZ < grid.z) grid.z = maxGridZ;
 
-  AT_DISPATCH_FLOATING_TYPES_AND_HALF(input.scalar_type(),
+  AT_DISPATCH_FLOATING_TYPES_AND2(kHalf, kBFloat16, input.scalar_type(),
     "max_pool2d_with_indices_out_cuda_frame",
     [&] {
       using accscalar_t = acc_type<scalar_t, true>;
