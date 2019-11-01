@@ -60,3 +60,6 @@ struct mse_updateGradInput_functor
 
 #include <THCUNN/generic/MSECriterion.cu>
 #include <THC/THCGenerateFloatTypes.h>
+
+#include <THCUNN/generic/MSECriterion.cu>
+#include <THC/THCGenerateBFloat16Type.h>
