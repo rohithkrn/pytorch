@@ -47,7 +47,7 @@ void prod_kernel_impl(TensorIterator& iter) {
 }
 
 static void std_var_kernel_cuda(TensorIterator& iter, bool unbiased, bool take_sqrt) {
-  AT_DISPATCH_FLOATING_TYPES_AND_HALF(iter.dtype(), "std", [&]() {
+  AT_DISPATCH_FLOATING_TYPES_AND2(kHalf, kBFloat16, iter.dtype(), "std", [&]() {
     std_var_kernel_impl<scalar_t>(iter, unbiased, take_sqrt);
   });
 }
@@ -98,7 +98,7 @@ static void prod_kernel_cuda(TensorIterator& iter) {
   if (iter.dtype() == kHalf) {
     return prod_kernel_impl<at::Half, float>(iter);
   }
-  AT_DISPATCH_ALL_TYPES(iter.dtype(), "prod_cuda", [&]() {
+  AT_DISPATCH_ALL_TYPES_AND(kBFloat16, iter.dtype(), "prod_cuda", [&]() {
     prod_kernel_impl<scalar_t>(iter);
   });
 }
@@ -110,7 +110,7 @@ static void mean_kernel_cuda(TensorIterator& iter) {
     // type promotion that does cast and reduction in a single kernel
     return mean_kernel_impl<at::Half, float, float>(iter);
   }
-  AT_DISPATCH_ALL_TYPES(iter.dtype(), "mean_cuda", [&]() {
+  AT_DISPATCH_ALL_TYPES_AND(kBFloat16, iter.dtype(), "mean_cuda", [&]() {
     mean_kernel_impl<scalar_t>(iter);
   });
 }
@@ -122,7 +122,7 @@ static void norm_kernel_cuda(TensorIterator& iter, Scalar p) {
     // type promotion that does cast and reduction in a single kernel
     return norm_kernel_cuda_impl<at::Half, float, float>(iter, p);
   }
-  AT_DISPATCH_FLOATING_TYPES(iter.dtype(), "norm_cuda", [&]() {
+  AT_DISPATCH_FLOATING_TYPES_AND(kBFloat16, iter.dtype(), "norm_cuda", [&]() {
     norm_kernel_cuda_impl<scalar_t>(iter, p);
   });
 }
@@ -161,7 +161,7 @@ void max_values_kernel_cuda(TensorIterator& iter) {
   if (iter.dtype(1) == kHalf) {
     max_values_kernel_cuda_impl<at::Half, float>(iter);
   } else {
-    AT_DISPATCH_ALL_TYPES(iter.dtype(), "max_values_cuda", [&]() {
+    AT_DISPATCH_ALL_TYPES_AND(kBFloat16, iter.dtype(), "max_values_cuda", [&]() {
       max_values_kernel_cuda_impl<scalar_t>(iter);
     });
   }
@@ -171,7 +171,7 @@ void min_values_kernel_cuda(TensorIterator& iter) {
   if (iter.dtype(1) == kHalf) {
     min_values_kernel_cuda_impl<at::Half, float>(iter);
   } else {
-    AT_DISPATCH_ALL_TYPES(iter.dtype(), "min_values_cuda", [&]() {
+    AT_DISPATCH_ALL_TYPES_AND(kBFloat16, iter.dtype(), "min_values_cuda", [&]() {
       min_values_kernel_cuda_impl<scalar_t>(iter);
     });
   }
@@ -199,7 +199,7 @@ void argmax_kernel_cuda(TensorIterator& iter) {
     // we can convert halves to float and do all the operations in float
     argmax_kernel_cuda_impl<at::Half, float>(iter);
   } else {
-    AT_DISPATCH_ALL_TYPES(iter.dtype(1), "argmax_cuda", [&]() {
+    AT_DISPATCH_ALL_TYPES_AND(kBFloat16, iter.dtype(1), "argmax_cuda", [&]() {
       argmax_kernel_cuda_impl<scalar_t>(iter);
     });
   }
@@ -211,7 +211,7 @@ void argmin_kernel_cuda(TensorIterator& iter) {
     // we can convert halves to float and do all the operations in float
     argmin_kernel_cuda_impl<at::Half, float>(iter);
   } else {
-    AT_DISPATCH_ALL_TYPES(iter.dtype(1), "argmin_cuda", [&]() {
+    AT_DISPATCH_ALL_TYPES_AND(kBFloat16, iter.dtype(1), "argmin_cuda", [&]() {
       argmin_kernel_cuda_impl<scalar_t>(iter);
     });
   }
