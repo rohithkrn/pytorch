@@ -110,7 +110,7 @@ static void mean_kernel_cuda(TensorIterator& iter) {
     // type promotion that does cast and reduction in a single kernel
     return mean_kernel_impl<at::Half, float, float>(iter);
   }
-  AT_DISPATCH_ALL_TYPES(iter.dtype(), "mean_cuda", [&]() {
+  AT_DISPATCH_ALL_TYPES_AND(kBFloat16,	iter.dtype(), "mean_cuda", [&]() {
     mean_kernel_impl<scalar_t>(iter);
   });
 }
