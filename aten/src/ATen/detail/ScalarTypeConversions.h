@@ -10,14 +10,14 @@ namespace at { namespace detail {
 
 template <typename T>
 inline T load(const void* data, ScalarType src_type) {
-  return AT_DISPATCH_ALL_TYPES_AND3(at::ScalarType::Half, at::ScalarType::BFloat16, at::ScalarType::Bool, src_type, "load", [&]() {
+  return AT_DISPATCH_ALL_TYPES_AND_COMPLEX_AND3(at::ScalarType::Half, at::ScalarType::BFloat16, at::ScalarType::Bool, src_type, "load", [&]() {
     return at::convert<T>(*(scalar_t*)data);
   });
 }
 
 template <typename T>
 inline void store(T value, void* dst, ScalarType dst_type) {
-  AT_DISPATCH_ALL_TYPES_AND3(at::ScalarType::Half, at::ScalarType::BFloat16, at::ScalarType::Bool, dst_type, "store", [&]() {
+  AT_DISPATCH_ALL_TYPES_AND_COMPLEX_AND2(at::ScalarType::Half, at::ScalarType::BFloat16, at::ScalarType::Bool, dst_type, "store", [&]() {
     *(scalar_t*)dst = at::convert<scalar_t>(value);
   });
 }

@@ -125,7 +125,7 @@ Value* TracingState::getValue(const IValue& var) {
     }
 
     // Didn't find it. Bake in a constant
-    if (ten.is_variable() && ten.requires_grad()) {
+    if (ten.requires_grad()) {
       pauseTracing();
       std::ostringstream oss;
       oss << "Cannot insert a Tensor that requires grad as a constant. "
@@ -290,7 +290,7 @@ static void gatherParametersAndBuffers(
     const std::string& prefix) {
   Graph& g = *self_value->owningGraph();
 
-  state->setValue(self.module_object(), self_value);
+  state->setValue(self._ivalue(), self_value);
 
   auto self_ty = self.type();
   for (const script::NameValue& s : self.named_attributes(/*recurse=*/false)) {
@@ -328,8 +328,8 @@ std::pair<std::shared_ptr<TracingState>, Stack> trace(
     // if we are a module, then make sure the modules parameters are in the map
     // and mapped to accesses to the self object
     if (self) {
-      Value* self_value =
-          state->graph->insertInput(0, "self")->setType(self->module_object()->type());
+      Value* self_value = state->graph->insertInput(0, "self")->setType(
+          self->_ivalue()->type());
       gatherParametersAndBuffers(state, self_value, *self, {"__module"});
     }
 
@@ -504,14 +504,12 @@ void addInputs(
     n->addInput(none);
   }
 }
-#ifdef BUILD_NAMEDTENSOR
 void addInputs(
     Node* n,
     const char* name,
     c10::optional<at::DimnameList> value) {
   TORCH_CHECK(false, "NYI: Named tensors are not supported with the tracer");
 }
-#endif
 void addInputs(
     Node* n,
     const char* name,

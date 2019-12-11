@@ -3,4 +3,3 @@
 
 #include <THC/generic/THCTensorMathReduce.cu>
 #include <THC/THCGenerateBFloat16Type.h>
-

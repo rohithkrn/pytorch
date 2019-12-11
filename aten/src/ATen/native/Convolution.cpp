@@ -179,7 +179,7 @@ auto ConvParams::use_mkldnn(const at::Tensor& input) const -> bool {
     return false;
   }
   return (input.is_mkldnn()) || // input is mkldnn Tensor
-    (input.type().backend() == at::Backend::CPU &&
+    (input.options().backend() == at::Backend::CPU &&
      input.scalar_type() == kFloat && // only on CPU Float Tensors
      !is_dilated() && // doesn't support dilation
      !transposed && // or transposed tensors
@@ -190,7 +190,7 @@ auto ConvParams::use_mkldnn(const at::Tensor& input) const -> bool {
 auto ConvParams::use_nnpack(const at::Tensor& input) const -> bool {
 #if AT_NNPACK_ENABLED()
   return at::_nnpack_available() &&
-         input.type().backend() == at::Backend::CPU &&
+         input.options().backend() == at::Backend::CPU &&
          input.scalar_type() == kFloat && // only on CPU Float Tensors
          !is_dilated() && // or dilation
          !transposed &&   // or transposed tensors
@@ -594,11 +594,11 @@ at::Tensor _convolution(
           output = at::thnn_conv_depthwise2d(input.contiguous(), weight, kernel_size, bias, stride, padding, dilation);
       }
   } else if (params.use_cudnn(input)) {
-    TORCH_CHECK(input.type() == weight.type(),
-             "Input type (", input.type().toString(), ") and weight type (", weight.type().toString(),
+    TORCH_CHECK(input.options().type_equal(weight.options()),
+             "Input type (", input.toString(), ") and weight type (", weight.toString(),
              ") should be the same");
-    TORCH_CHECK(!bias.defined() || (input.type() == bias.type()),
-             "Input type (", input.type().toString(), ") and bias type (", bias.type().toString(),
+    TORCH_CHECK(!bias.defined() || (input.options().type_equal(bias.options())),
+             "Input type (", input.toString(), ") and bias type (", bias.toString(),
              ") should be the same");
 
     if (params.transposed) {
@@ -611,11 +611,11 @@ at::Tensor _convolution(
           params.padding, params.stride, params.dilation, params.groups, params.benchmark, params.deterministic);
     }
   } else if (params.use_miopen(input)) {
-    TORCH_CHECK(input.type() == weight.type(),
-             "Input type (", input.type().toString(), ") and weight type (", weight.type().toString(),
+    TORCH_CHECK(input.options().type_equal(weight.options()),
+             "Input type (", input.toString(), ") and weight type (", weight.toString(),
              ") should be the same");
-    TORCH_CHECK(!bias.defined() || (input.type() == bias.type()),
-             "Input type (", input.type().toString(), ") and bias type (", bias.type().toString(),
+    TORCH_CHECK(!bias.defined() || (input.options().type_equal(bias.options())),
+             "Input type (", input.toString(), ") and bias type (", bias.toString(),
              ") should be the same");
 
     if (params.transposed) {
@@ -629,11 +629,11 @@ at::Tensor _convolution(
     }
   } else if (params.use_mkldnn(input)) {
 #if AT_MKLDNN_ENABLED()
-    TORCH_CHECK(input.type() == weight.type(),
-             "Input type (", input.type().toString(), ") and weight type (", weight.type().toString(),
+    TORCH_CHECK(input.options().type_equal(weight.options()),
+             "Input type (", input.toString(), ") and weight type (", weight.toString(),
              ") should be the same");
-    TORCH_CHECK(!bias.defined() || (input.type() == bias.type()),
-             "Input type (", input.type().toString(), ") and bias type (", bias.type().toString(),
+    TORCH_CHECK(!bias.defined() || (input.options().type_equal(bias.options())),
+             "Input type (", input.toString(), ") and bias type (", bias.toString(),
              ") should be the same");
     if (!input_is_mkldnn) {
       output = at::mkldnn_convolution(input.contiguous(), weight.contiguous(), bias.defined() ? bias.contiguous() : bias,
@@ -749,8 +749,8 @@ std::tuple<Tensor, Tensor, Tensor> convolution_backward_overrideable(
         bool transposed, IntArrayRef output_padding, int64_t groups, std::array<bool, 3> output_mask) {
   AT_ERROR("You are likely triggering this with tensor backend other than CPU/CUDA/MKLDNN, if this is intended, please use torch::RegisterOperators() to override this function ");
   return std::tuple<Tensor, Tensor, Tensor>(
-          at::empty_like(input, at::MemoryFormat::Contiguous),
-          at::empty_like(weight, at::MemoryFormat::Contiguous),
+          at::empty_like(input, LEGACY_CONTIGUOUS_MEMORY_FORMAT),
+          at::empty_like(weight, LEGACY_CONTIGUOUS_MEMORY_FORMAT),
           at::empty({}));
 }
 
@@ -805,7 +805,7 @@ std::tuple<Tensor,Tensor,Tensor> _convolution_double_backward(
       }
     }
   } else {
-    ggO = at::zeros_like(gO, at::MemoryFormat::Contiguous);
+    ggO = at::zeros_like(gO, LEGACY_CONTIGUOUS_MEMORY_FORMAT);
   }
 
   if (ggb.defined()) {
@@ -896,7 +896,7 @@ std::tuple<Tensor,Tensor,Tensor> _convolution_double_backward(
       }
     }
   } else {
-    gW = at::zeros_like(weight, at::MemoryFormat::Contiguous);
+    gW = at::zeros_like(weight, LEGACY_CONTIGUOUS_MEMORY_FORMAT);
   }
 
   // Compute gI = convT(ggW, gO.t()) if !transposed
@@ -985,12 +985,12 @@ std::tuple<Tensor,Tensor,Tensor> _convolution_double_backward(
       }
     }
   } else {
-    gI = at::zeros_like(input, at::MemoryFormat::Contiguous);
+    gI = at::zeros_like(input, LEGACY_CONTIGUOUS_MEMORY_FORMAT);
   }
 
-  if (output_mask[0] && !ggO.defined()) ggO = at::zeros_like(gO, at::MemoryFormat::Contiguous);
-  if (output_mask[1] && !gI.defined()) gI = at::zeros_like(input, at::MemoryFormat::Contiguous);
-  if (output_mask[2] && !gW.defined()) gW = at::zeros_like(weight, at::MemoryFormat::Contiguous);
+  if (output_mask[0] && !ggO.defined()) ggO = at::zeros_like(gO, LEGACY_CONTIGUOUS_MEMORY_FORMAT);
+  if (output_mask[1] && !gI.defined()) gI = at::zeros_like(input, LEGACY_CONTIGUOUS_MEMORY_FORMAT);
+  if (output_mask[2] && !gW.defined()) gW = at::zeros_like(weight, LEGACY_CONTIGUOUS_MEMORY_FORMAT);
 
   return std::tuple<Tensor,Tensor,Tensor>{ggO, gI, gW};
 }
