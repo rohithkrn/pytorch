@@ -47,7 +47,7 @@ void prod_kernel_impl(TensorIterator& iter) {
 }
 
 static void std_var_kernel_cuda(TensorIterator& iter, bool unbiased, bool take_sqrt) {
-  AT_DISPATCH_FLOATING_TYPES_AND_HALF(iter.dtype(), "std", [&]() {
+  AT_DISPATCH_FLOATING_TYPES_AND2(at::ScalarType::Half, at::ScalarType::BFloat16, iter.dtype(), "std", [&]() {
     std_var_kernel_impl<scalar_t>(iter, unbiased, take_sqrt);
   });
 }
@@ -97,6 +97,8 @@ static void sum_kernel_cuda(TensorIterator& iter) {
 static void prod_kernel_cuda(TensorIterator& iter) {
   if (iter.dtype() == kHalf) {
     return prod_kernel_impl<at::Half, float>(iter);
+  } else if (iter.dtype() == kBFloat16) {
+    return prod_kernel_impl<at::BFloat16, float>(iter);
   }
   AT_DISPATCH_ALL_TYPES(iter.dtype(), "prod_cuda", [&]() {
     prod_kernel_impl<scalar_t>(iter);
@@ -125,6 +127,11 @@ static void norm_kernel_cuda(TensorIterator& iter, Scalar p) {
   } else if (iter.dtype(1) == kHalf && iter.dtype() == kFloat) {
     // type promotion that does cast and reduction in a single kernel
     return norm_kernel_cuda_impl<at::Half, float, float>(iter, p);
+  } else if (iter.dtype() == kBFloat16) {
+    return norm_kernel_cuda_impl<at::BFloat16, float>(iter, p);
+  } else if (iter.dtype(1) == kBFloat16 && iter.dtype() == kFloat) {
+    // type promotion that does cast and reduction in a single kernel
+    return norm_kernel_cuda_impl<at::BFloat16, float, float>(iter, p);
   }
   AT_DISPATCH_FLOATING_TYPES(iter.dtype(), "norm_cuda", [&]() {
     norm_kernel_cuda_impl<scalar_t>(iter, p);

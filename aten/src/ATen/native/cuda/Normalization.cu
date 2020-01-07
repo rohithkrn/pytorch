@@ -51,7 +51,7 @@ std::tuple<Tensor, Tensor, Tensor> batch_norm_backward_cuda(const Tensor& grad_o
 }
 
 std::tuple<Tensor, Tensor> batch_norm_stats_cuda(const Tensor& self, double epsilon) {
-  return AT_DISPATCH_FLOATING_TYPES_AND_HALF(self.scalar_type(), "batch_norm_stats_cuda", [&] {
+  return AT_DISPATCH_FLOATING_TYPES_AND2(at::ScalarType::Half, at::ScalarType::BFloat16, self.scalar_type(), "batch_norm_stats_cuda", [&] {
       if (cuda::detail::canUse32BitIndexMath(self)) {
         return batch_norm_stats_cuda_template<scalar_t, int32_t>(self, epsilon);
       } else {
@@ -69,7 +69,7 @@ Tensor batch_norm_elemt_cuda(const Tensor& self, const Tensor& weight, const Ten
 
 Tensor& batch_norm_elemt_cuda_out(Tensor& output, const Tensor& self, const Tensor& weight, const Tensor& bias,
                              const Tensor& mean, const Tensor& invstd, double epsilon) {
-  AT_DISPATCH_FLOATING_TYPES_AND_HALF(self.scalar_type(), "batch_norm_elemt", [&] {
+  AT_DISPATCH_FLOATING_TYPES_AND2(at::ScalarType::Half, at::ScalarType::BFloat16, self.scalar_type(), "batch_norm_elemt", [&] {
       auto mean_st = mean.dtype();
       auto invstd_st = invstd.dtype();
       TORCH_CHECK(mean_st == invstd_st, "mean and invstd need to have the same data types");
@@ -103,7 +103,7 @@ std::tuple<Tensor, Tensor> batch_norm_gather_stats_with_counts_cuda(const Tensor
                                                         const Tensor& running_var, double momentum, double epsilon, IntArrayRef counts) {
   Tensor counts_ = at::from_blob((void*)counts.data(), {(int64_t)counts.size()}, self.options().dtype(at::kLong).device(at::kCPU));
   counts_ = counts_.to(self.device()).to(running_mean.dtype());
-  return AT_DISPATCH_FLOATING_TYPES_AND_HALF(running_mean.scalar_type(), "batch_norm_update_stats_cuda", [&] {
+  return AT_DISPATCH_FLOATING_TYPES_AND2(at::ScalarType::Half, at::ScalarType::BFloat16, running_mean.scalar_type(), "batch_norm_update_stats_cuda", [&] {
       using accscalar_t = at::acc_type<scalar_t, true>;
       if (cuda::detail::canUse32BitIndexMath(self)) {
         return batch_norm_gather_stats_cuda_template<scalar_t, accscalar_t, int32_t>(mean, invstd, running_mean, running_var, momentum, epsilon, counts_);
@@ -115,7 +115,7 @@ std::tuple<Tensor, Tensor> batch_norm_gather_stats_with_counts_cuda(const Tensor
 
 std::tuple<Tensor, Tensor, Tensor, Tensor> batch_norm_backward_reduce_cuda(const Tensor& self, const Tensor& input, const Tensor& mean, const Tensor& invstd,
                                                                            const Tensor& weight, bool input_g, bool weight_g, bool bias_g) {
-  return AT_DISPATCH_FLOATING_TYPES_AND_HALF(self.scalar_type(), "batch_norm_backward_reduce", [&] {
+  return AT_DISPATCH_FLOATING_TYPES_AND2(at::ScalarType::Half, at::ScalarType::BFloat16, self.scalar_type(), "batch_norm_backward_reduce", [&] {
       auto mean_st = mean.dtype();
       auto invstd_st = invstd.dtype();
       TORCH_CHECK(mean_st == invstd_st, "mean and invstd need to have the same data types");
@@ -138,7 +138,7 @@ std::tuple<Tensor, Tensor, Tensor, Tensor> batch_norm_backward_reduce_cuda(const
 
 Tensor batch_norm_backward_elemt_cuda(const Tensor& self, const Tensor& input, const Tensor& mean, const Tensor& invstd,
                                       const Tensor& weight, const Tensor& mean_dy, const Tensor& mean_dy_xmu) {
-  return AT_DISPATCH_FLOATING_TYPES_AND_HALF(self.scalar_type(), "batch_norm_backward_elemt", [&] {
+  return AT_DISPATCH_FLOATING_TYPES_AND2(at::ScalarType::Half, at::ScalarType::BFloat16, self.scalar_type(), "batch_norm_backward_elemt", [&] {
       auto mean_st = mean.dtype();
       auto invstd_st = invstd.dtype();
       TORCH_CHECK(mean_st == invstd_st, "mean and invstd need to have the same data types");
@@ -161,7 +161,7 @@ Tensor batch_norm_backward_elemt_cuda(const Tensor& self, const Tensor& input, c
 
 std::tuple<Tensor, Tensor> batch_norm_update_stats_cuda(
         const Tensor& self, const Tensor& running_mean, const Tensor& running_var, double momentum) {
-  return AT_DISPATCH_FLOATING_TYPES_AND_HALF(self.scalar_type(), "batch_norm_backward", [&] {
+  return AT_DISPATCH_FLOATING_TYPES_AND2(at::ScalarType::Half, at::ScalarType::BFloat16, self.scalar_type(), "batch_norm_backward", [&] {
       auto mean_st = running_mean.dtype();
       auto var_st = running_var.dtype();
       TORCH_CHECK(mean_st == var_st, "running_mean and running_var need to have the same data types");

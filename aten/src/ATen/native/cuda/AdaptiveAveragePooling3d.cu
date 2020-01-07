@@ -465,7 +465,7 @@ void adaptive_avg_pool3d_backward_out_cuda_template(
               osizeT, osizeH, osizeW);
         });
   } else {
-    AT_DISPATCH_FLOATING_TYPES_AND_HALF(
+    AT_DISPATCH_FLOATING_TYPES_AND2(at::ScalarType::Half, at::ScalarType::BFloat16, 
         input.scalar_type(), "adaptive_avg_pool3d_backward_cuda", [&] {
           scalar_t* gradInput_data = gradInput.data_ptr<scalar_t>();
           scalar_t* gradOutput_data = gradOutput.data_ptr<scalar_t>();

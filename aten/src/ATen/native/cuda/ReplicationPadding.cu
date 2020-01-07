@@ -234,7 +234,7 @@ void replication_pad1d_out_cuda_template(
       " Calculated output W: ", outputW);
 
 
-  AT_DISPATCH_FLOATING_TYPES_AND_HALF(
+  AT_DISPATCH_FLOATING_TYPES_AND2(at::ScalarType::Half, at::ScalarType::BFloat16, 
       input.scalar_type(), "replication_pad1d_cuda", [&] {
 
 
@@ -305,7 +305,7 @@ void replication_pad1d_backward_out_cuda_template(
   gradInput.resize_as_(input);
   gradInput.zero_();
 
-  AT_DISPATCH_FLOATING_TYPES_AND_HALF(
+  AT_DISPATCH_FLOATING_TYPES_AND2(at::ScalarType::Half, at::ScalarType::BFloat16, 
       input.scalar_type(), "replication_pad1d_backward_cuda", [&] {
 
       auto gradInput_ = gradInput;
@@ -371,7 +371,7 @@ void replication_pad2d_out_cuda_template(
       "input (H: ", inputH, ", W: ", inputW, ") is too small."
       " Calculated output H: ", outputH, " W: ", outputW);
 
-  AT_DISPATCH_FLOATING_TYPES_AND_HALF(
+  AT_DISPATCH_FLOATING_TYPES_AND2(at::ScalarType::Half, at::ScalarType::BFloat16, 
       input.scalar_type(), "replication_pad2d_cuda", [&] {
 
 
@@ -453,7 +453,7 @@ void replication_pad2d_backward_out_cuda_template(
   gradInput.resize_as_(input);
   gradInput.zero_();
 
-  AT_DISPATCH_FLOATING_TYPES_AND_HALF(
+  AT_DISPATCH_FLOATING_TYPES_AND2(at::ScalarType::Half, at::ScalarType::BFloat16, 
       input.scalar_type(), "replication_pad2d_backward_cuda", [&] {
 
         auto gradInput_ = gradInput;
@@ -607,7 +607,7 @@ void replication_pad3d_out_cuda_template(
   int outputH = inputH + ptop + pbottom;
   int outputW  = inputW + pleft + pright;
 
-  AT_DISPATCH_FLOATING_TYPES_AND_HALF(
+  AT_DISPATCH_FLOATING_TYPES_AND2(at::ScalarType::Half, at::ScalarType::BFloat16, 
       input.scalar_type(), "replication_pad3d_cuda", [&] {
 
       if (numInputDims == 4) {
@@ -680,7 +680,7 @@ void replication_pad3d_backward_out_cuda_template(
   gradInput.resize_as_(input);
   gradInput.zero_();
 
-  AT_DISPATCH_FLOATING_TYPES_AND_HALF(
+  AT_DISPATCH_FLOATING_TYPES_AND2(at::ScalarType::Half, at::ScalarType::BFloat16, 
       input.scalar_type(), "replication_pad3d_backward_cuda", [&] {
 
       auto gradInput_ = gradInput;
