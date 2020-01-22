@@ -229,7 +229,7 @@ void adaptive_max_pool2d_out_cuda_template(
     int64_t istrideH = input.stride(1);
     int64_t istrideW = input.stride(2);
 
-    AT_DISPATCH_FLOATING_TYPES_AND_HALF(input.scalar_type(),
+    AT_DISPATCH_FLOATING_TYPES_AND_BFLOAT16_AND(kHalf, input.scalar_type(),
       "adaptive_max_pool2d_cuda",
       [&] {
         output.resize_({sizeD, osizeH, osizeW});
@@ -266,7 +266,7 @@ void adaptive_max_pool2d_out_cuda_template(
     int64_t istrideH = input_.stride(2);
     int64_t istrideW = input_.stride(3);
 
-    AT_DISPATCH_FLOATING_TYPES_AND_HALF(input_.scalar_type(),
+    AT_DISPATCH_FLOATING_TYPES_AND_BFLOAT16_AND(kHalf, input_.scalar_type(),
       "adaptive_max_pool2d_cuda",
       [&] {
         output.resize_({sizeB, sizeD, osizeH, osizeW});
@@ -326,7 +326,7 @@ void adaptive_max_pool2d_backward_out_cuda_template(
     gradInput.resize_as_(input);
     gradInput.zero_();
 
-    AT_DISPATCH_FLOATING_TYPES_AND_HALF(input.scalar_type(),
+    AT_DISPATCH_FLOATING_TYPES_AND_BFLOAT16_AND(kHalf, input.scalar_type(),
       "adaptive_max_pool2d_backward_cuda",
       [&] {
         scalar_t *gradInput_data = gradInput.data_ptr<scalar_t>();
@@ -372,7 +372,7 @@ void adaptive_max_pool2d_backward_out_cuda_template(
 
     //bool atomic = (isizeH%osizeH != 0) || (isizeW%osizeW != 0);
 
-    AT_DISPATCH_FLOATING_TYPES_AND_HALF(input.scalar_type(),
+    AT_DISPATCH_FLOATING_TYPES_AND_BFLOAT16_AND(kHalf, input.scalar_type(),
       "adaptive_max_pool2d_backward_cuda",
       [&] {
         scalar_t *gradInput_data = gradInput.data_ptr<scalar_t>();
