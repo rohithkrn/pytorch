@@ -20,6 +20,17 @@
     return __VA_ARGS__();                                               \
   }
 
+#if !defined(__HIP_PLATFORM_HCC__)
+#define AT_SKIP_BFLOAT16_IF_NOT_ROCM(SCALARTYPE, NAME, ...)                              \
+  if(std::is_same<SCALAR, at::BFloat16>::value){                                         \
+    AT_ERROR(#NAME, " not implemented for '", toString(at::ScalarType::BFloat16), "'");  \
+  } else {                                                                               \
+    __VA_ARGS__()                                                                        \
+  }
+#else
+#define AT_SKIP_BFLOAT16_IF_NOT_ROCM(SCALARTYPE, NAME, ...) __VA_ARGS__()
+#endif
+
 namespace detail {
 
 inline at::ScalarType scalar_type(at::ScalarType s) {
