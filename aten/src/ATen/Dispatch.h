@@ -22,7 +22,7 @@
 
 #if !defined(__HIP_PLATFORM_HCC__)
 #define AT_SKIP_BFLOAT16_IF_NOT_ROCM(SCALARTYPE, NAME, ...)                              \
-  if(std::is_same<SCALAR, at::BFloat16>::value){                                         \
+  if(std::is_same<SCALARTYPE, at::BFloat16>::value){                                         \
     AT_ERROR(#NAME, " not implemented for '", toString(at::ScalarType::BFloat16), "'");  \
   } else {                                                                               \
     __VA_ARGS__()                                                                        \
