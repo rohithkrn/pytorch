@@ -42,6 +42,8 @@ const char* toString(DispatchKey t) {
       return "TESTING_ONLY_GenericModeTensorId";
     case DispatchKey::AutocastTensorId:
       return "AutocastTensorId";
+    case DispatchKey::AutocastTensorIdBFloat16:
+      return "AutocastTensorIdBFloat16";
     case DispatchKey::TESTING_ONLY_GenericWrapperTensorId:
       return "TESTING_ONLY_GenericWrapperTensorId";
     default:

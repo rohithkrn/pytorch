@@ -130,7 +130,7 @@ enum class DispatchKey : uint8_t {
   // Autocasting precedes VariableTypeId, to ensure casts are autograd-exposed
   // and inputs are saved for backward in the post-autocast type.
   AutocastTensorId,
-
+  AutocastTensorIdBFloat16,
   // Here are some reserved pre-autograd keys for user-defined backends, see Note [Private use TensorId]
   PrivateUse1_PreAutogradTensorId,
   PrivateUse2_PreAutogradTensorId,

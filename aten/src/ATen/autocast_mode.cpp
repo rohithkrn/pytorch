@@ -16,8 +16,9 @@ bool is_enabled() {
   return c10::impl::tls_is_dispatch_key_included(DispatchKey::AutocastTensorId);
 }
 
-void set_enabled(bool new_enabled) {
-  c10::impl::tls_set_dispatch_key_included(DispatchKey::AutocastTensorId, new_enabled);
+void set_enabled(bool new_enabled, bool use_fp16) {
+  auto autocast_type = use_fp16 ? DispatchKey::AutocastTensorId : DispatchKey::AutocastTensorIdBFloat16;
+  c10::impl::tls_set_dispatch_key_included(autocast_type, new_enabled);
 }
 
 namespace {
@@ -63,6 +64,7 @@ int decrement_nesting() {
 // Wrapper templates below are specialized based on a policy template parameter.
 enum class CastPolicy : uint8_t {
   fp16 = 0, // Cast all inputs to at::kHalf before running the op.
+  bfp16,
   fp32, // Cast all inputs to at::kFloat before running the op.
   fp32_set_opt_dtype, // Treats functions (like softmax) that
                       //   1. we'd like to run in fp32 and
@@ -98,6 +100,8 @@ inline at::ScalarType prioritize(at::ScalarType current, const Tensor& nextArg) 
       return at::kFloat; // prioritizes float over half
     } else if (current == at::kHalf && next == at::kHalf) {
       return at::kHalf;
+    } else if (current == at::kBFloat16 && next == at::kBFloat16) {
+      return at::kBFloat16;
     } else {
       AT_ERROR("Unexpected floating ScalarType in at::autocast::prioritize");
       return current;
@@ -147,7 +151,7 @@ inline Tensor cached_cast(at::ScalarType to_type, const Tensor& arg) {
   if (is_eligible(arg) && (arg.scalar_type() != to_type)) {
     // Heuristic:  Do what Apex does, and cache fp16 casts of fp32 model weights (leaves).
     // See cached_casts declaration above for detailed strategy.
-    bool can_try_cache = (to_type == at::kHalf && arg.scalar_type() == at::kFloat && arg.requires_grad() && arg.is_leaf());
+    bool can_try_cache = ((to_type == at::kHalf || to_type == at::kBFloat16) && arg.scalar_type() == at::kFloat && arg.requires_grad() && arg.is_leaf());
     if (can_try_cache) {
       auto it = cached_casts.find(arg.unsafeGetTensorImpl());
       if (it != cached_casts.end()) {
@@ -232,6 +236,15 @@ struct WrapFunction_<CastPolicy::fp16, Redispatch, F, Ret, guts::typelist::typel
   static Ret call(Args... args) {
     c10::impl::ExcludeDispatchKeyGuard no_autocasting(DispatchKey::AutocastTensorId);
     return (*F)(cached_cast(at::kHalf, args)...);
+  }
+};
+
+// CastPolicy::bfp16
+template<class Redispatch, Redispatch* F, class Ret, class... Args>
+struct WrapFunction_<CastPolicy::bfp16, Redispatch, F, Ret, guts::typelist::typelist<Args...>> {
+  static Ret call(Args... args) {
+    c10::impl::ExcludeDispatchKeyGuard no_autocasting(DispatchKey::AutocastTensorIdBFloat16);
+    return (*F)(cached_cast(at::kBFloat16, args)...);
   }
 };
 
@@ -394,6 +407,7 @@ auto register_out_of_place = c10::import()
   KERNEL_UNBOXED_ONLY(ADD_NS(cudnn_convolution_transpose), "aten::cudnn_convolution_transpose", Tensor (const Tensor &, const Tensor &, IntArrayRef, IntArrayRef, IntArrayRef, IntArrayRef, int64_t, bool, bool), fp16)
   KERNEL(ADD_NS(prelu), "aten::prelu", Tensor (const Tensor &, const Tensor &), fp16)
   KERNEL(ADD_NS(addmm), "aten::addmm", Tensor (const Tensor &, const Tensor &, const Tensor &, Scalar, Scalar), fp16)
+  KERNEL(ADD_NS(addmm), "aten::addmm", Tensor (const Tensor &, const Tensor &, const Tensor &, Scalar, Scalar), bfp16)
   KERNEL(ADD_NS(addmv), "aten::addmv", Tensor (const Tensor &, const Tensor &, const Tensor &, Scalar, Scalar), fp16)
   KERNEL(ADD_NS(addr), "aten::addr", Tensor (const Tensor &, const Tensor &, const Tensor &, Scalar, Scalar), fp16)
   KERNEL(ADD_NS(matmul), "aten::matmul", Tensor (const Tensor &, const Tensor &), fp16)
