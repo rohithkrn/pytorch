@@ -7,6 +7,7 @@
 #include <torch/csrc/autograd/profiler.h>
 #include <torch/csrc/autograd/python_function.h>
 #include <torch/csrc/autograd/function.h>
+#include <torch/csrc/utils/python_arg_parser.h>
 
 PyObject* THPAutograd_initExtension(PyObject* _unused, PyObject *unused) {
   using namespace torch::autograd::profiler;
@@ -62,8 +63,9 @@ PyObject* THPAutograd_initExtension(PyObject* _unused, PyObject *unused) {
 
 namespace torch { namespace autograd {
 
-static PyObject * set_autocast_enabled(PyObject* _unused, PyObject *arg1, PyObject *arg2) {
+static PyObject * set_autocast_enabled(PyObject* _unused, PyObject *args, PyObject *kwargs) {
   HANDLE_TH_ERRORS
+  /*
   if (!PyBool_Check(arg1)) {
     throw TypeError("enabled must be a bool (got %s)", Py_TYPE(arg1)->tp_name);
   }
@@ -71,6 +73,11 @@ static PyObject * set_autocast_enabled(PyObject* _unused, PyObject *arg1, PyObje
     throw TypeError("use_fp16 must be a bool (got %s)", Py_TYPE(arg2)->tp_name);
   }
   at::autocast::set_enabled(arg1 == Py_True, arg2 == Py_True);
+  */
+  static PythonArgParser parser({"set_autocast_enabled(bool enabled, ScalarType low_precision_type)"});
+  ParsedArgs<2> parsed_args;
+  auto r = parser.parse(args, kwargs, parsed_args);
+  at::autocast::set_enabled(r.toBool(0), r.scalartype(1));
   Py_RETURN_NONE;
   END_HANDLE_TH_ERRORS
 }
@@ -148,7 +155,7 @@ static PyObject * is_anomaly_mode_enabled(PyObject* _unused, PyObject *arg) {
 static PyMethodDef methods[] = {
   {"set_grad_enabled", (PyCFunction)set_grad_enabled, METH_O, nullptr},
   {"is_grad_enabled", (PyCFunction)is_grad_enabled, METH_NOARGS, nullptr},
-  {"set_autocast_enabled", (PyCFunction)set_autocast_enabled, METH_O, nullptr},
+  {"set_autocast_enabled", (PyCFunction)set_autocast_enabled, METH_VARARGS | METH_KEYWORDS , NULL},
   {"is_autocast_enabled", (PyCFunction)is_autocast_enabled, METH_NOARGS, nullptr},
   {"clear_autocast_cache", (PyCFunction)clear_autocast_cache, METH_NOARGS, nullptr},
   {"autocast_increment_nesting", (PyCFunction)autocast_increment_nesting, METH_NOARGS, nullptr},

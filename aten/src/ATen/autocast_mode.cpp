@@ -16,9 +16,14 @@ bool is_enabled() {
   return c10::impl::tls_is_dispatch_key_included(DispatchKey::AutocastTensorId);
 }
 
-void set_enabled(bool new_enabled, bool use_fp16) {
-  auto autocast_type = use_fp16 ? DispatchKey::AutocastTensorId : DispatchKey::AutocastTensorIdBFloat16;
-  c10::impl::tls_set_dispatch_key_included(autocast_type, new_enabled);
+void set_enabled(bool new_enabled, at::ScalarType low_precision_type) {
+  if(low_precision_type == at::kHalf) {
+    c10::impl::tls_set_dispatch_key_included(DispatchKey::AutocastTensorId, new_enabled);
+  } else if(low_precision_type == at::kBFloat16) {
+    c10::impl::tls_set_dispatch_key_included(DispatchKey::AutocastTensorIdBFloat16, new_enabled);
+  } else {
+    TORCH_CHECK(1, "unsupported low_precision_type passed to autocast");
+  }
 }
 
 namespace {
@@ -377,8 +382,18 @@ Therefore, for the moment, this is all copy pasted in from VariableTypeEverythin
   .impl(REGISTER_NAME, c10::dispatch(DispatchKey::AutocastTensorId, \
     &WrapFunction<CastPolicy::POLICY, SIGNATURE, SIGNATURE, &FUNC>::type::call))
 
+// BFloat16 DispatchKey version of KERNEL macro
+#define KERNEL2(FUNC, REGISTER_NAME, SIGNATURE, POLICY) \
+  .impl(REGISTER_NAME, c10::dispatch(DispatchKey::AutocastTensorIdBFloat16, \
+    &WrapFunction<CastPolicy::POLICY, SIGNATURE, SIGNATURE, &FUNC>::type::call))
+
 #define KERNEL_UNBOXED_ONLY(FUNC, REGISTER_NAME, SIGNATURE, POLICY) \
   .impl(REGISTER_NAME, c10::dispatch(DispatchKey::AutocastTensorId, \
+    c10::CppFunction::makeUnboxedOnly(&WrapFunction<CastPolicy::POLICY, SIGNATURE, SIGNATURE, &FUNC>::type::call)))
+
+// BFloat16 DispatchKey version of KERNEL_UNBOXED_ONLY macro
+#define KERNEL_UNBOXED_ONLY2(FUNC, REGISTER_NAME, SIGNATURE, POLICY) \
+  .impl(REGISTER_NAME, c10::dispatch(DispatchKey::AutocastTensorIdBFloat16, \
     c10::CppFunction::makeUnboxedOnly(&WrapFunction<CastPolicy::POLICY, SIGNATURE, SIGNATURE, &FUNC>::type::call)))
 
 // Less-common but still useful case: redispatching to a function with a new signature (e.g. appending a dtype)
@@ -407,7 +422,6 @@ auto register_out_of_place = c10::import()
   KERNEL_UNBOXED_ONLY(ADD_NS(cudnn_convolution_transpose), "aten::cudnn_convolution_transpose", Tensor (const Tensor &, const Tensor &, IntArrayRef, IntArrayRef, IntArrayRef, IntArrayRef, int64_t, bool, bool), fp16)
   KERNEL(ADD_NS(prelu), "aten::prelu", Tensor (const Tensor &, const Tensor &), fp16)
   KERNEL(ADD_NS(addmm), "aten::addmm", Tensor (const Tensor &, const Tensor &, const Tensor &, Scalar, Scalar), fp16)
-  KERNEL(ADD_NS(addmm), "aten::addmm", Tensor (const Tensor &, const Tensor &, const Tensor &, Scalar, Scalar), bfp16)
   KERNEL(ADD_NS(addmv), "aten::addmv", Tensor (const Tensor &, const Tensor &, const Tensor &, Scalar, Scalar), fp16)
   KERNEL(ADD_NS(addr), "aten::addr", Tensor (const Tensor &, const Tensor &, const Tensor &, Scalar, Scalar), fp16)
   KERNEL(ADD_NS(matmul), "aten::matmul", Tensor (const Tensor &, const Tensor &), fp16)
@@ -418,6 +432,29 @@ auto register_out_of_place = c10::import()
   KERNEL(ADD_NS(baddbmm), "aten::baddbmm", Tensor (const Tensor &, const Tensor &, const Tensor &, Scalar, Scalar), fp16)
   KERNEL(ADD_NS(bmm), "aten::bmm", Tensor (const Tensor &, const Tensor &), fp16)
   KERNEL_UNBOXED_ONLY(ADD_NS(chain_matmul), "aten::chain_matmul", Tensor (TensorList), fp16)
+  //bfloat16
+   KERNEL_UNBOXED_ONLY2(ADD_NS(_convolution), "aten::_convolution", Tensor (const Tensor &, const Tensor &, const Tensor &, IntArrayRef, IntArrayRef, IntArrayRef, bool, IntArrayRef, int64_t, bool, bool, bool), bfp16)
+  KERNEL_UNBOXED_ONLY2(ADD_NS(_convolution_nogroup), "aten::_convolution_nogroup", Tensor (const Tensor &, const Tensor &, const Tensor &, IntArrayRef, IntArrayRef, IntArrayRef, bool, IntArrayRef), bfp16)
+  KERNEL_UNBOXED_ONLY2(ADD_NS(conv1d), "aten::conv1d", Tensor (const Tensor &, const Tensor &, const Tensor &, IntArrayRef, IntArrayRef, IntArrayRef, int64_t), bfp16)
+  KERNEL_UNBOXED_ONLY2(ADD_NS(conv2d), "aten::conv2d", Tensor (const Tensor &, const Tensor &, const Tensor &, IntArrayRef, IntArrayRef, IntArrayRef, int64_t), bfp16)
+  KERNEL_UNBOXED_ONLY2(ADD_NS(conv3d), "aten::conv3d", Tensor (const Tensor &, const Tensor &, const Tensor &, IntArrayRef, IntArrayRef, IntArrayRef, int64_t), bfp16)
+  KERNEL_UNBOXED_ONLY2(ADD_NS(conv_tbc), "aten::conv_tbc", Tensor (const Tensor &, const Tensor &, const Tensor &, int64_t), bfp16)
+  KERNEL_UNBOXED_ONLY2(ADD_NS(conv_transpose1d), "aten::conv_transpose1d", Tensor (const Tensor &, const Tensor &, const Tensor &, IntArrayRef, IntArrayRef, IntArrayRef, int64_t, IntArrayRef), bfp16)
+  KERNEL_UNBOXED_ONLY2(ADD_NS(conv_transpose2d), "aten::conv_transpose2d.input", Tensor (const Tensor &, const Tensor &, const Tensor &, IntArrayRef, IntArrayRef, IntArrayRef, int64_t, IntArrayRef),bfp16)
+  KERNEL_UNBOXED_ONLY2(ADD_NS(conv_transpose3d), "aten::conv_transpose3d.input", Tensor (const Tensor &, const Tensor &, const Tensor &, IntArrayRef, IntArrayRef, IntArrayRef, int64_t, IntArrayRef), bfp16)
+  KERNEL_UNBOXED_ONLY2(ADD_NS(convolution), "aten::convolution", Tensor (const Tensor &, const Tensor &, const Tensor &, IntArrayRef, IntArrayRef, IntArrayRef, bool, IntArrayRef, int64_t), bfp16)
+  KERNEL2(ADD_NS(addmm), "aten::addmm", Tensor (const Tensor &, const Tensor &, const Tensor &, Scalar, Scalar), bfp16)
+  KERNEL2(ADD_NS(addmv), "aten::addmv", Tensor (const Tensor &, const Tensor &, const Tensor &, Scalar, Scalar), bfp16)
+  KERNEL2(ADD_NS(addr), "aten::addr", Tensor (const Tensor &, const Tensor &, const Tensor &, Scalar, Scalar), bfp16)
+  KERNEL2(ADD_NS(matmul), "aten::matmul", Tensor (const Tensor &, const Tensor &), bfp16)
+  KERNEL2(ADD_NS(mm), "aten::mm", Tensor (const Tensor &, const Tensor &), bfp16)
+  KERNEL2(ADD_NS(mv), "aten::mv", Tensor (const Tensor &, const Tensor &), bfp16)
+  KERNEL_UNBOXED_ONLY2(ADD_NS(linear), "aten::linear", Tensor (const Tensor &, const Tensor &, const Tensor &), bfp16)
+  KERNEL2(ADD_NS(addbmm), "aten::addbmm", Tensor (const Tensor &, const Tensor &, const Tensor &, Scalar, Scalar), bfp16)
+  KERNEL2(ADD_NS(baddbmm), "aten::baddbmm", Tensor (const Tensor &, const Tensor &, const Tensor &, Scalar, Scalar), bfp16)
+  KERNEL2(ADD_NS(bmm), "aten::bmm", Tensor (const Tensor &, const Tensor &), bfp16)
+  KERNEL_UNBOXED_ONLY2(ADD_NS(chain_matmul), "aten::chain_matmul", Tensor (TensorList), bfp16)
+
   // fp32
   KERNEL(ADD_NS(acos), "aten::acos", Tensor (const Tensor &), fp32)
   KERNEL(ADD_NS(asin), "aten::asin", Tensor (const Tensor &), fp32)
