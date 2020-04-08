@@ -40,8 +40,10 @@ const char* toString(DispatchKey t) {
       return "BackendSelect";
     case DispatchKey::TESTING_ONLY_GenericModeTensorId:
       return "TESTING_ONLY_GenericModeTensorId";
-    case DispatchKey::AutocastTensorId:
-      return "AutocastTensorId";
+    case DispatchKey::AutocastTensorIdFP16:
+      return "AutocastTensorIdFP16";
+    case DispatchKey::AutocastTensorIdBFloat16:
+      return "AutocastTensorIdBFloat16";
     case DispatchKey::TESTING_ONLY_GenericWrapperTensorId:
       return "TESTING_ONLY_GenericWrapperTensorId";
     default:

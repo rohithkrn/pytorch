@@ -109,23 +109,25 @@ class autocast(object):
     Arguments:
         enabled(bool, optional, default=True):  Whether autocasting should be enabled in the region.
     """
-    def __init__(self, enabled=True):
+    def __init__(self, enabled=True, low_precision_type=torch.float16):
         if enabled and not torch.cuda.is_available():
             warnings.warn("torch.cuda.amp.autocast only affects CUDA ops, but CUDA is not available.  Disabling.")
             self._enabled = False
         else:
             self._enabled = enabled
+            #self._use_fp16 = use_fp16
+            self._low_precision_type = low_precision_type
 
     def __enter__(self):
         self.prev = torch.is_autocast_enabled()
-        torch.set_autocast_enabled(self._enabled)
+        torch.set_autocast_enabled(self._enabled, self._low_precision_type)
         torch.autocast_increment_nesting()
 
     def __exit__(self, *args):
         # Drop the cache when we exit to a nesting level that's outside any instance of autocast.
         if torch.autocast_decrement_nesting() == 0:
             torch.clear_autocast_cache()
-        torch.set_autocast_enabled(self.prev)
+        torch.set_autocast_enabled(self.prev, self._low_precision_type)
         return False
 
     def __call__(self, func):
