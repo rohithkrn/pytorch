@@ -60,7 +60,7 @@ class AutocastTestLists(object):
         # The remaining lists organize ops that autocast treats explicitly.
 
         # tuple elements in the list:
-        # [op, op_args, autocast low preicision types, flag[=False] to skip the operator]
+        # (op, op_args, autocast low preicision types, flag[=False] to skip the operator)
         self.torch_fp16_and_bfp16 = [
             ("_convolution", conv_args_fp32[1] + bias_fp32 + ((1, 1), (0, 0), (1, 1), False,
                                                               (0, 0), 1, False, True, True), self._half_types),
