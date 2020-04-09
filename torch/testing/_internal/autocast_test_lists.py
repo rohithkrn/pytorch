@@ -1,5 +1,5 @@
 import torch
-
+from torch.testing._internal.common_utils import TEST_WITH_ROCM
 
 class AutocastTestLists(object):
     # Supplies ops and arguments for test_autocast_* in test/test_cuda.py
@@ -56,41 +56,45 @@ class AutocastTestLists(object):
             ("__mul__", pointwise0_fp32 + pointwise1_fp16, torch.float32),
         ]
 
+        self._half_types = [torch.half, torch.bfloat16] if TEST_WITH_ROCM else [torch.half]
         # The remaining lists organize ops that autocast treats explicitly.
-        self.torch_fp16 = [
+
+        # tuple elements in the list:
+        # [op, op_args, autocast low preicision types, flag[=False] to skip the operator]
+        self.torch_fp16_and_bfp16 = [
             ("_convolution", conv_args_fp32[1] + bias_fp32 + ((1, 1), (0, 0), (1, 1), False,
-                                                              (0, 0), 1, False, True, True)),
-            ("_convolution_nogroup", conv_args_fp32[1] + bias_fp32 + ((1, 1), (0, 0), (1, 1), False, (0, 0))),
-            ("conv1d", conv_args_fp32[0]),
-            ("conv2d", conv_args_fp32[1]),
-            ("conv3d", conv_args_fp32[2]),
-            ("conv_tbc", conv_args_fp32[0] + bias_fp32),
-            ("conv_transpose1d", conv_args_fp32[0]),
-            ("conv_transpose2d", conv_args_fp32[1]),
-            ("conv_transpose3d", conv_args_fp32[2]),
-            ("convolution", conv_args_fp32[1] + bias_fp32 + ((1, 1), (0, 0), (1, 1), False, (0, 0), 1)),
+                                                              (0, 0), 1, False, True, True), self._half_types),
+            ("_convolution_nogroup", conv_args_fp32[1] + bias_fp32 + ((1, 1), (0, 0), (1, 1), False, (0, 0)), self._half_types),
+            ("conv1d", conv_args_fp32[0], self._half_types),
+            ("conv2d", conv_args_fp32[1], self._half_types),
+            ("conv3d", conv_args_fp32[2], self._half_types),
+            ("conv_tbc", conv_args_fp32[0] + bias_fp32, self._half_types),
+            ("conv_transpose1d", conv_args_fp32[0], self._half_types),
+            ("conv_transpose2d", conv_args_fp32[1], self._half_types),
+            ("conv_transpose3d", conv_args_fp32[2], self._half_types),
+            ("convolution", conv_args_fp32[1] + bias_fp32 + ((1, 1), (0, 0), (1, 1), False, (0, 0), 1), self._half_types),
             # cudnn_convolutions with bias
-            ("cudnn_convolution", conv_args_fp32[1] + bias_fp32 + ((0, 0), (1, 1), (1, 1), 1, False, True)),
+            ("cudnn_convolution", conv_args_fp32[1] + bias_fp32 + ((0, 0), (1, 1), (1, 1), 1, False, True), self._half_types, TEST_WITH_ROCM),
             ("cudnn_convolution_transpose", conv_args_fp32[1] + bias_fp32 + ((0, 0), (0, 0), (1, 1),
-                                                                             (1, 1), 1, False, True)),
+                                                                             (1, 1), 1, False, True), self._half_types, TEST_WITH_ROCM),
             # cudnn_convolutions with no bias
-            ("cudnn_convolution", conv_args_fp32[1] + ((0, 0), (1, 1), (1, 1), 1, False, True)),
-            ("cudnn_convolution_transpose", conv_args_fp32[1] + ((0, 0), (0, 0), (1, 1), (1, 1), 1, False, True)),
-            ("prelu", pointwise0_fp32 + element0_fp32),
-            ("addmm", mat1_fp32 + mat2_fp32 + mat3_fp32),
-            ("addmv", pointwise0_fp32 + mat2_fp32 + pointwise1_fp32),
-            ("addr", mat0_fp32 + pointwise0_fp32 + pointwise1_fp32),
-            ("matmul", mat0_fp32 + mat1_fp32),
-            ("mm", mat0_fp32 + mat1_fp32),
-            ("mv", mat0_fp32 + pointwise0_fp32),
-            ("chain_matmul", mat0_fp32 + mat1_fp32 + mat2_fp32),
+            ("cudnn_convolution", conv_args_fp32[1] + ((0, 0), (1, 1), (1, 1), 1, False, True), self._half_types, TEST_WITH_ROCM),
+            ("cudnn_convolution_transpose", conv_args_fp32[1] + ((0, 0), (0, 0), (1, 1), (1, 1), 1, False, True), self._half_types, TEST_WITH_ROCM),
+            ("prelu", pointwise0_fp32 + element0_fp32, [torch.half]),
+            ("addmm", mat1_fp32 + mat2_fp32 + mat3_fp32, self._half_types),
+            ("addmv", pointwise0_fp32 + mat2_fp32 + pointwise1_fp32, self._half_types),
+            ("addr", mat0_fp32 + pointwise0_fp32 + pointwise1_fp32, self._half_types),
+            ("matmul", mat0_fp32 + mat1_fp32, self._half_types),
+            ("mm", mat0_fp32 + mat1_fp32, self._half_types),
+            ("mv", mat0_fp32 + pointwise0_fp32, self._half_types),
+            ("chain_matmul", mat0_fp32 + mat1_fp32 + mat2_fp32, self._half_types),
             ("addbmm", mat0_fp32 + (torch.randn((n, n, n), device=dev, dtype=torch.float32),
-                                    torch.randn((n, n, n), device=dev, dtype=torch.float32))),
+                                    torch.randn((n, n, n), device=dev, dtype=torch.float32)), self._half_types),
             ("baddbmm", (torch.randn((n, n, n), device=dev, dtype=torch.float32),
                          torch.randn((n, n, n), device=dev, dtype=torch.float32),
-                         torch.randn((n, n, n), device=dev, dtype=torch.float32))),
+                         torch.randn((n, n, n), device=dev, dtype=torch.float32)), self._half_types),
             ("bmm", (torch.randn((n, n, n), device=dev, dtype=torch.float32),
-                     torch.randn((n, n, n), device=dev, dtype=torch.float32))),
+                     torch.randn((n, n, n), device=dev, dtype=torch.float32)), self._half_types)
         ]
         self.torch_fp32 = [
             ("acos", (pointwise0_fp16[0].clamp(-.9, 0.9),)),
@@ -160,8 +164,8 @@ class AutocastTestLists(object):
             ("cat", (pointwise0_fp16 + pointwise1_fp32,)),
             ("stack", (pointwise0_fp16 + pointwise1_fp32,)),
         ]
-        self.nn_fp16 = [
-            ("linear", mat0_fp32 + mat1_fp32 + mat2_fp32),
+        self.nn_fp16_and_bfp16 = [
+            ("linear", mat0_fp32 + mat1_fp32 + mat2_fp32, self._half_types),
         ]
         self.nn_fp32 = [
             ("softplus", pointwise0_fp16),
@@ -177,8 +181,8 @@ class AutocastTestLists(object):
             ("soft_margin_loss", mat0_fp16 + (torch.ones((n, n), device=dev, dtype=torch.long),)),
             ("multi_margin_loss", mat0_fp16 + (torch.ones((n,), device=dev, dtype=torch.long),)),
         ]
-        self.methods_fp16 = [
-            ("__matmul__", mat0_fp32 + mat1_fp32)
+        self.methods_fp16_and_bfp16 = [
+            ("__matmul__", mat0_fp32 + mat1_fp32, self._half_types)
         ]
         self.methods_fp32 = [
             ("__pow__", (torch.rand(n, device=dev, dtype=torch.float16), 1.5)),
