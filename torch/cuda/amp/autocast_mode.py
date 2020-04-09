@@ -115,7 +115,6 @@ class autocast(object):
             self._enabled = False
         else:
             self._enabled = enabled
-            #self._use_fp16 = use_fp16
             self._low_precision_type = low_precision_type
 
     def __enter__(self):
