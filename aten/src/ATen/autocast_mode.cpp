@@ -23,7 +23,7 @@ void set_enabled(bool new_enabled, at::ScalarType low_precision_type) {
   } else if(low_precision_type == at::kBFloat16) {
     c10::impl::tls_set_dispatch_key_included(DispatchKey::AutocastTensorIdBFloat16, new_enabled);
   } else {
-    TORCH_CHECK(1, "unsupported low_precision_type passed to autocast");
+    TORCH_CHECK(false, "unsupported low_precision_type passed to autocast");
   }
 }
 
