@@ -4,7 +4,7 @@ namespace at {
 namespace autocast {
 
 TORCH_API bool is_enabled();
-TORCH_API void set_enabled(bool enabled, at::ScalarType use_fp16);
+TORCH_API void set_enabled(bool enabled, at::ScalarType low_precision_type);
 TORCH_API void clear_cache();
 TORCH_API int increment_nesting();
 TORCH_API int decrement_nesting();

@@ -13,7 +13,8 @@ namespace at {
 namespace autocast {
 
 bool is_enabled() {
-  return c10::impl::tls_is_dispatch_key_included(DispatchKey::AutocastTensorIdFP16);
+  return c10::impl::tls_is_dispatch_key_included(DispatchKey::AutocastTensorIdFP16) ||
+         c10::impl::tls_is_dispatch_key_included(DispatchKey::AutocastTensorIdBFloat16);
 }
 
 void set_enabled(bool new_enabled, at::ScalarType low_precision_type) {
@@ -69,7 +70,7 @@ int decrement_nesting() {
 // Wrapper templates below are specialized based on a policy template parameter.
 enum class CastPolicy : uint8_t {
   fp16 = 0, // Cast all inputs to at::kHalf before running the op.
-  bfp16,
+  bfp16, // Cast all inputs to at::kBFloat16 before running the op.
   fp32, // Cast all inputs to at::kFloat before running the op.
   fp32_set_opt_dtype, // Treats functions (like softmax) that
                       //   1. we'd like to run in fp32 and
@@ -105,8 +106,6 @@ inline at::ScalarType prioritize(at::ScalarType current, const Tensor& nextArg) 
       return at::kFloat; // prioritizes float over half
     } else if (current == at::kHalf && next == at::kHalf) {
       return at::kHalf;
-    } else if (current == at::kBFloat16 && next == at::kBFloat16) {
-      return at::kBFloat16;
     } else {
       AT_ERROR("Unexpected floating ScalarType in at::autocast::prioritize");
       return current;
@@ -154,7 +153,7 @@ inline bool is_eligible(const Tensor& arg) {
 // Overload to catch Tensor args
 inline Tensor cached_cast(at::ScalarType to_type, const Tensor& arg) {
   if (is_eligible(arg) && (arg.scalar_type() != to_type)) {
-    // Heuristic:  Do what Apex does, and cache fp16 casts of fp32 model weights (leaves).
+    // Heuristic:  Do what Apex does, and cache fp16/bfloat16 casts of fp32 model weights (leaves).
     // See cached_casts declaration above for detailed strategy.
     bool can_try_cache = ((to_type == at::kHalf || to_type == at::kBFloat16) && arg.scalar_type() == at::kFloat && arg.requires_grad() && arg.is_leaf());
     if (can_try_cache) {
@@ -495,7 +494,7 @@ auto register_out_of_place = c10::import()
   KERNEL_UNBOXED_ONLY(ADD_NS(nll_loss), "aten::nll_loss", Tensor (const Tensor &, const Tensor &, const Tensor &, int64_t, int64_t), fp32)
   KERNEL_UNBOXED_ONLY(ADD_NS(nll_loss2d), "aten::nll_loss2d", Tensor (const Tensor &, const Tensor &, const Tensor &, int64_t, int64_t), fp32)
   KERNEL(ADD_NS(hinge_embedding_loss), "aten::hinge_embedding_loss", Tensor (const Tensor &, const Tensor &, double, int64_t), fp32)
-  KERNEL(ADD_NS(kl_div), "aten::kl_div", Tensor (const Tensor &, const Tensor &, int64_t), fp32)
+  KERNEL(ADD_NS(kl_div), "aten::kl_div", Tensor (const Tensor &, const Tensor &, int64_t, bool), fp32)
   KERNEL(ADD_NS(l1_loss), "aten::l1_loss", Tensor (const Tensor &, const Tensor &, int64_t), fp32)
   KERNEL(ADD_NS(smooth_l1_loss), "aten::smooth_l1_loss", Tensor (const Tensor &, const Tensor &, int64_t), fp32)
   KERNEL(ADD_NS(mse_loss), "aten::mse_loss", Tensor (const Tensor &, const Tensor &, int64_t), fp32)
@@ -505,7 +504,6 @@ auto register_out_of_place = c10::import()
   KERNEL(ADD_NS(triplet_margin_loss), "aten::triplet_margin_loss", Tensor (const Tensor &, const Tensor &, const Tensor &, double, double, double, bool, int64_t), fp32)
   KERNEL_UNBOXED_ONLY(ADD_NS(multi_margin_loss), "aten::multi_margin_loss", Tensor (const Tensor &, const Tensor &, Scalar, Scalar, const Tensor &, int64_t), fp32)
   KERNEL_UNBOXED_ONLY(ADD_NS(binary_cross_entropy_with_logits), "aten::binary_cross_entropy_with_logits", Tensor (const Tensor &, const Tensor &, const Tensor &, const Tensor &, int64_t), fp32)
-  KERNEL_UNBOXED_ONLY2(ADD_NS(binary_cross_entropy_with_logits), "aten::binary_cross_entropy_with_logits", Tensor (const Tensor &, const Tensor &, const Tensor &, const Tensor &, int64_t), fp32)
   KERNEL(ADD_NS(dist), "aten::dist", Tensor (const Tensor &, const Tensor &, Scalar), fp32)
   KERNEL(ADD_NS(pdist), "aten::pdist", Tensor (const Tensor &, double), fp32)
   KERNEL(ADD_NS(cdist), "aten::cdist", Tensor (const Tensor &, const Tensor &, double, c10::optional<int64_t>), fp32)
