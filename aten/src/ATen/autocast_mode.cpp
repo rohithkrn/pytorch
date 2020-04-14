@@ -478,7 +478,7 @@ auto register_out_of_place = c10::import()
   KERNEL(ADD_NS(gelu), "aten::gelu", Tensor (const Tensor &), fp32)
   KERNEL_UNBOXED_ONLY(ADD_NS(layer_norm), "aten::layer_norm", Tensor (const Tensor &, IntArrayRef, const Tensor &, const Tensor &, double, bool), fp32)
   // The macro doesn't like this one so I had to write it out manually.
-  .impl_UNBOXED("aten::native_layer_norm", DispatchKey::AutocastTensorId,
+  .impl_UNBOXED("aten::native_layer_norm", DispatchKey::AutocastTensorIdFP16,
                 &WrapFunction<CastPolicy::fp32, std::tuple<Tensor,Tensor,Tensor> (const Tensor &, const Tensor &, const Tensor &, int64_t, int64_t, double), std::tuple<Tensor,Tensor,Tensor> (const Tensor &, const Tensor &, const Tensor &, int64_t, int64_t, double), &ADD_NS(native_layer_norm)>::type::call)
   KERNEL_UNBOXED_ONLY(ADD_NS(group_norm), "aten::group_norm", Tensor (const Tensor &, int64_t, const Tensor &, const Tensor &, double, bool), fp32)
   KERNEL_UNBOXED_ONLY(ADD_NS(frobenius_norm), "aten::frobenius_norm", Tensor (const Tensor &), fp32)
@@ -547,7 +547,7 @@ auto register_out_of_place = c10::import()
   ;
 
 auto register_banned = torch::import()
-  .impl_UNBOXED("aten::binary_cross_entropy", DispatchKey::AutocastTensorId,
+  .impl_UNBOXED("aten::binary_cross_entropy", DispatchKey::AutocastTensorIdFP16,
                 &at::autocast::binary_cross_entropy_banned);
 }
 #endif
