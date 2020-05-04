@@ -74,12 +74,14 @@ class AutocastTestLists(object):
             ("conv_transpose3d", conv_args_fp32[2], self._half_types),
             ("convolution", conv_args_fp32[1] + bias_fp32 + ((1, 1), (0, 0), (1, 1), False, (0, 0), 1), self._half_types),
             # cudnn_convolutions with bias
-            ("cudnn_convolution", conv_args_fp32[1] + bias_fp32 + ((0, 0), (1, 1), (1, 1), 1, False, True), self._half_types, TEST_WITH_ROCM),
+            ("cudnn_convolution", conv_args_fp32[1] + bias_fp32 + ((0, 0), (1, 1), (1, 1), 1, False, True),
+                                                                   self._half_types, TEST_WITH_ROCM),
             ("cudnn_convolution_transpose", conv_args_fp32[1] + bias_fp32 + ((0, 0), (0, 0), (1, 1),
-                                                                             (1, 1), 1, False, True), self._half_types, TEST_WITH_ROCM),
+                                            (1, 1), 1, False, True), self._half_types, TEST_WITH_ROCM),
             # cudnn_convolutions with no bias
             ("cudnn_convolution", conv_args_fp32[1] + ((0, 0), (1, 1), (1, 1), 1, False, True), self._half_types, TEST_WITH_ROCM),
-            ("cudnn_convolution_transpose", conv_args_fp32[1] + ((0, 0), (0, 0), (1, 1), (1, 1), 1, False, True), self._half_types, TEST_WITH_ROCM),
+            ("cudnn_convolution_transpose", conv_args_fp32[1] + ((0, 0), (0, 0), (1, 1), (1, 1), 1, False, True),
+                                                                 self._half_types, TEST_WITH_ROCM),
             ("prelu", pointwise0_fp32 + element0_fp32, [torch.half]),
             ("addmm", mat1_fp32 + mat2_fp32 + mat3_fp32, self._half_types),
             ("addmv", pointwise0_fp32 + mat2_fp32 + pointwise1_fp32, self._half_types),

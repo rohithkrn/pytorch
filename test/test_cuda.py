@@ -2570,7 +2570,8 @@ t2.start()
             for t in range(num_threads):
                 self.assertEqual(results[t].sum().item(), size * size)
 
-    def _run_autocast_outofplace(self, op, args, run_as_type, low_prec_type=torch.float16, out_type=None, module=torch, add_kwargs=None):
+    def _run_autocast_outofplace(self, op, args, run_as_type, low_prec_type=torch.float16,
+                                 out_type=None, module=torch, add_kwargs=None):
         # helper to cast args
         def cast(val, to_type):
             if isinstance(val, torch.Tensor):
@@ -2613,7 +2614,7 @@ t2.start()
             # If both torch.* and Tensor.* variants were found, check outputs are identical
             if (output is not None) and (output_method is not None):
                 self.assertTrue(type(output) == type(output_method))
-                if  isinstance(output, torch.Tensor) and output.dtype == torch.bfloat16:
+                if isinstance(output, torch.Tensor) and output.dtype == torch.bfloat16:
                     # casting to float since equal is not enabled for bfloat16
                     output = output.float()
                     output_method = output_method.float()
@@ -2632,7 +2633,7 @@ t2.start()
                 else:
                     control = getattr(args[0].to(run_as_type), op)(*cast(args[1:], run_as_type), **add_kwargs)
                 self.assertTrue(type(output_to_compare) == type(control))
-                if  isinstance(control, torch.Tensor) and control.dtype == torch.bfloat16:
+                if isinstance(control, torch.Tensor) and control.dtype == torch.bfloat16:
                     # casting to float since equal is not enabled for bfloat16
                     output_to_compare = output_to_compare.float()
                     control = control.float()
@@ -2743,6 +2744,7 @@ t2.start()
                     with torch.cuda.amp.autocast(enabled=False):
                         type_no_autocast = torch.norm(a_ignore).dtype
                     self.assertTrue(torch.norm(a_ignore).dtype is type_no_autocast)
+
 
     def test_autocast_custom_enabled(self):
         class MyMM(torch.autograd.Function):

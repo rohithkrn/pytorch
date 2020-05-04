@@ -156,7 +156,7 @@ static PyObject * is_anomaly_mode_enabled(PyObject* _unused, PyObject *arg) {
 static PyMethodDef methods[] = {
   {"set_grad_enabled", (PyCFunction)set_grad_enabled, METH_O, nullptr},
   {"is_grad_enabled", (PyCFunction)is_grad_enabled, METH_NOARGS, nullptr},
-  {"set_autocast_enabled", (PyCFunction)set_autocast_enabled, METH_VARARGS | METH_KEYWORDS , NULL},
+  {"set_autocast_enabled", (PyCFunction)set_autocast_enabled, METH_VARARGS | METH_KEYWORDS , nullptr},
   {"is_autocast_enabled", (PyCFunction)is_autocast_enabled, METH_NOARGS, nullptr},
   {"clear_autocast_cache", (PyCFunction)clear_autocast_cache, METH_NOARGS, nullptr},
   {"autocast_increment_nesting", (PyCFunction)autocast_increment_nesting, METH_NOARGS, nullptr},
