@@ -76,8 +76,8 @@ class AutocastTestLists(object):
             # cudnn_convolutions with bias
             ("cudnn_convolution", conv_args_fp32[1] + bias_fp32 + ((0, 0), (1, 1),
                                                                    (1, 1), 1, False, True), self._half_types, TEST_WITH_ROCM),
-            ("cudnn_convolution_transpose", conv_args_fp32[1] + bias_fp32 + ((0, 0), (0, 0), (1, 1),
-                                                                             (1, 1), 1, False, True), self._half_types, TEST_WITH_ROCM),
+            ("cudnn_convolution_transpose", conv_args_fp32[1] + bias_fp32 + ((0, 0), (0, 0), (1, 1), (1, 1), 1, False, True),
+             self._half_types, TEST_WITH_ROCM),
             # cudnn_convolutions with no bias
             ("cudnn_convolution", conv_args_fp32[1] + ((0, 0), (1, 1), (1, 1), 1, False, True), self._half_types, TEST_WITH_ROCM),
             ("cudnn_convolution_transpose", conv_args_fp32[1] + ((0, 0), (0, 0), (1, 1),
