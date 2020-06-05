@@ -108,6 +108,7 @@ class autocast(object):
 
     Arguments:
         enabled(bool, optional, default=True):  Whether autocasting should be enabled in the region.
+        low_precision_type(torch.dtype, optional, default=torch.float16): takes torch.float16 or torch.bfloat16
     """
     def __init__(self, enabled=True, low_precision_type=torch.float16):
         if enabled and not torch.cuda.is_available():
