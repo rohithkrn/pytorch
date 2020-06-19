@@ -577,8 +577,46 @@ static Tensor threshold_out_cuda(
   return iter.output();
 }
 
+template <typename scalar_t>
+__global__ void my_threshold_kernel(
+  scalar_t* result,
+  scalar_t* self,
+  scalar_t threshold,
+  scalar_t value,
+  int64_t in_numel) {
+    int64_t idx = threadIdx.x + blockIdx.x*blockDim.x;
+    if(idx >= in_numel) return;
+
+    result[idx] = self[idx] > threshold ? self[idx] : value; 
+  }
+static Tensor my_threshold_out_cuda(const Tensor& self, Scalar threshold, Scalar value) {
+  Tensor result = at::empty_like(self, LEGACY_CONTIGUOUS_MEMORY_FORMAT);
+  int64_t in_numel = self.numel(); 
+  const dim3 block = dim3(std::min(static_cast<int64_t>(cuda::getApplyBlock().x), self.numel()));
+  dim3 grid;
+  int curDevice = -1;
+  cudaGetDevice(&curDevice);
+  TORCH_CHECK(cuda::getApplyGrid(self.numel(), grid, curDevice), "my threshold grid allocation failed");
+  cudaStream_t stream = at::cuda::getCurrentCUDAStream(curDevice);
+  AT_DISPATCH_FLOATING_TYPES_AND2(kHalf, kBFloat16, self.scalar_type(), "my_threshold_cuda", [&] {
+    my_threshold_kernel<scalar_t>
+      <<<grid, block, 0, stream>>>(
+      result.data_ptr<scalar_t>(),
+      self.data_ptr<scalar_t>(),
+      threshold.to<scalar_t>(),
+      value.to<scalar_t>(),
+      in_numel);
+  });
+  return result;
+}
+
 Tensor threshold_cuda(const Tensor& self, Scalar threshold, Scalar value) {
   return threshold_out_cuda(nullopt, self, threshold, value, self);
+}
+
+Tensor my_threshold_cuda(const Tensor& self, Scalar threshold, Scalar value) {
+  //return threshold_out_cuda(nullopt, self, threshold, value, self);
+  return my_threshold_out_cuda(self, threshold, value);
 }
 
 Tensor& threshold__cuda(Tensor& self, Scalar threshold, Scalar value) {
@@ -594,6 +632,11 @@ Tensor& threshold_out_cuda(Tensor& result, const Tensor& self, Scalar threshold,
 Tensor threshold_backward_cuda(const Tensor& grad, const Tensor& self, Scalar threshold) {
   return threshold_out_cuda(nullopt, self, threshold, 0, grad);
 }
+
+Tensor my_threshold_backward_cuda(const Tensor& grad, const Tensor& self, Scalar threshold) {
+  return threshold_out_cuda(nullopt, self, threshold, 0, grad);
+}
+
 
 REGISTER_DISPATCH(hardtanh_backward_stub, &hardtanh_backward_kernel);
 REGISTER_DISPATCH(hardshrink_stub, &hardshrink_kernel);

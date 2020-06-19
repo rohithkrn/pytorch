@@ -20,6 +20,7 @@ DEFINE_DISPATCH(softplus_backward_stub);
 DEFINE_DISPATCH(log_sigmoid_cpu_stub);
 DEFINE_DISPATCH(log_sigmoid_backward_cpu_stub);
 DEFINE_DISPATCH(threshold_stub);
+DEFINE_DISPATCH(my_threshold_stub);
 DEFINE_DISPATCH(hardtanh_backward_stub);
 DEFINE_DISPATCH(hardsigmoid_stub);
 DEFINE_DISPATCH(hardsigmoid_backward_stub);
@@ -344,8 +345,25 @@ static Tensor threshold_out(
   return iter.output();
 }
 
+static Tensor my_threshold_out(
+    optional<Tensor> opt_result,
+    const Tensor& self,
+    Scalar threshold,
+    Scalar value,
+    const Tensor& other) {
+  Tensor result = opt_result.value_or(Tensor());
+  auto iter = TensorIterator::binary_op(result, self, other);
+  my_threshold_stub(iter.device_type(), iter, threshold, value);
+  return iter.output();
+}
+
+
 Tensor threshold(const Tensor& self, Scalar threshold, Scalar value) {
   return threshold_out(nullopt, self, threshold, value, self);
+}
+
+Tensor my_threshold(const Tensor& self, Scalar threshold, Scalar value) {
+  return my_threshold_out(nullopt, self, threshold, value, self);
 }
 
 Tensor& threshold_(Tensor& self, Scalar threshold, Scalar value) {
@@ -360,6 +378,10 @@ Tensor& threshold_out(Tensor& result, const Tensor& self, Scalar threshold, Scal
 
 Tensor threshold_backward(const Tensor& grad, const Tensor& self, Scalar threshold) {
   return threshold_out(nullopt, self, threshold, 0, grad);
+}
+
+Tensor my_threshold_backward(const Tensor& grad, const Tensor& self, Scalar threshold) {
+  return my_threshold_out(nullopt, self, threshold, 0, grad);
 }
 
 // -----------------------------------

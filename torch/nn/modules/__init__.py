@@ -2,7 +2,7 @@ from .module import Module
 from .linear import Identity, Linear, Bilinear
 from .conv import Conv1d, Conv2d, Conv3d, \
     ConvTranspose1d, ConvTranspose2d, ConvTranspose3d
-from .activation import Threshold, ReLU, Hardtanh, ReLU6, Sigmoid, Tanh, \
+from .activation import MyThreshold, Threshold, ReLU, Hardtanh, ReLU6, Sigmoid, Tanh, \
     Softmax, Softmax2d, LogSoftmax, ELU, SELU, CELU, GELU, Hardshrink, LeakyReLU, LogSigmoid, \
     Softplus, Softshrink, MultiheadAttention, PReLU, Softsign, Softmin, Tanhshrink, RReLU, GLU, \
     Hardsigmoid, Hardswish
@@ -34,7 +34,7 @@ from .flatten import Flatten
 
 __all__ = [
     'Module', 'Identity', 'Linear', 'Conv1d', 'Conv2d', 'Conv3d', 'ConvTranspose1d',
-    'ConvTranspose2d', 'ConvTranspose3d', 'Threshold', 'ReLU', 'Hardtanh', 'ReLU6',
+    'ConvTranspose2d', 'ConvTranspose3d', 'MyThreshold', 'Threshold', 'ReLU', 'Hardtanh', 'ReLU6',
     'Sigmoid', 'Tanh', 'Softmax', 'Softmax2d', 'LogSoftmax', 'ELU', 'SELU', 'CELU', 'GLU', 'GELU', 'Hardshrink',
     'LeakyReLU', 'LogSigmoid', 'Softplus', 'Softshrink', 'MultiheadAttention', 'PReLU', 'Softsign', 'Softmin',
     'Tanhshrink', 'RReLU', 'L1Loss', 'NLLLoss', 'KLDivLoss', 'MSELoss', 'BCELoss', 'BCEWithLogitsLoss',

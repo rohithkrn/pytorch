@@ -1095,6 +1095,18 @@ def threshold(input, threshold, value, inplace=False):
         result = _VF.threshold(input, threshold, value)
     return result
 
+def my_threshold(input, threshold, value, inplace=False):
+    # type: (Tensor, float, float, bool) -> Tensor
+    r"""Thresholds each element of the input Tensor.
+
+    See :class:`~torch.nn.Threshold` for more details.
+    """
+    if inplace:
+        result = _VF.threshold_(input, threshold, value)
+    else:
+        result = _VF.my_threshold(input, threshold, value)
+    return result
+
 
 threshold_ = _add_docstr(_VF.threshold_, r"""
 threshold_(input, threshold, value) -> Tensor

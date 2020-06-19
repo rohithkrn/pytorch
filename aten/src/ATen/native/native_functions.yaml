@@ -304,6 +304,11 @@
     SparseCUDA: add_out_sparse_cuda
     MkldnnCPU: mkldnn_add_out
 
+#- func: custom_add.out(Tensor self, Tensor other, *, Scalar alpha=1, Tensor(a!) out) -> Tensor(a!)
+#  dispatch:
+#    CPU: custom_add_out
+#    CUDA: custom_add_out
+
 # For C++ only, until we have conversion from C++ numbers to Tensor
 - func: add.Scalar(Tensor self, Scalar other, Scalar alpha=1) -> Tensor
   use_c10_dispatcher: full
@@ -2342,6 +2347,16 @@
     MkldnnCPU: mkldnn_relu
     QuantizedCPU: quantized_relu
 
+- func: my_relu(Tensor self) -> Tensor
+  use_c10_dispatcher: full
+  variants: function, method
+  dispatch:
+    CPU: relu
+    CUDA: relu
+    MkldnnCPU: mkldnn_relu
+    QuantizedCPU: quantized_relu
+
+
 - func: relu_(Tensor(a!) self) -> Tensor(a!)
   variants: function, method
   dispatch:
@@ -2349,6 +2364,15 @@
     CUDA: relu_
     MkldnnCPU: mkldnn_relu_
     QuantizedCPU: quantized_relu_
+
+- func: my_relu_(Tensor(a!) self) -> Tensor(a!)
+  variants: function, method
+  dispatch:
+    CPU: relu_
+    CUDA: relu_
+    MkldnnCPU: mkldnn_relu_
+    QuantizedCPU: quantized_relu_
+
 
 - func: prelu(Tensor self, Tensor weight) -> Tensor
   use_c10_dispatcher: full
@@ -2709,6 +2733,15 @@
     CUDA: threshold_cuda
     QuantizedCPU: quantized_threshold
 
+- func: my_threshold(Tensor self, Scalar threshold, Scalar value) -> Tensor
+  use_c10_dispatcher: full
+  variants: function
+  dispatch:
+    CPU: my_threshold
+    CUDA: my_threshold_cuda
+    QuantizedCPU: quantized_threshold
+
+
 - func: threshold_(Tensor(a!) self, Scalar threshold, Scalar value) -> Tensor(a!)
   variants: function
   dispatch:
@@ -2726,6 +2759,13 @@
   dispatch:
     CPU: threshold_backward
     CUDA: threshold_backward_cuda
+
+- func: my_threshold_backward(Tensor grad_output, Tensor self, Scalar threshold) -> Tensor
+  use_c10_dispatcher: full
+  variants: function
+  dispatch:
+    CPU: my_threshold_backward
+    CUDA: my_threshold_backward_cuda
 
 - func: transpose.int(Tensor(a) self, int dim0, int dim1) -> Tensor(a)
   use_c10_dispatcher: full

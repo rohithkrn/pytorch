@@ -59,6 +59,52 @@ class Threshold(Module):
         )
 
 
+class MyThreshold(Module):
+    r"""Thresholds each element of the input Tensor.
+
+    Threshold is defined as:
+
+    .. math::
+        y =
+        \begin{cases}
+        x, &\text{ if } x > \text{threshold} \\
+        \text{value}, &\text{ otherwise }
+        \end{cases}
+
+    Args:
+        threshold: The value to threshold at
+        value: The value to replace with
+        inplace: can optionally do the operation in-place. Default: ``False``
+
+    Shape:
+        - Input: :math:`(N, *)` where `*` means, any number of additional
+          dimensions
+        - Output: :math:`(N, *)`, same shape as the input
+
+    Examples::
+
+        >>> m = nn.Threshold(0.1, 20)
+        >>> input = torch.randn(2)
+        >>> output = m(input)
+    """
+    __constants__ = ['threshold', 'value', 'inplace']
+
+    def __init__(self, threshold, value, inplace=False):
+        super(MyThreshold, self).__init__()
+        self.threshold = threshold
+        self.value = value
+        self.inplace = inplace
+        # TODO: check in THNN (if inplace == True, then assert value <= threshold)
+
+    def forward(self, input):
+        return F.my_threshold(input, self.threshold, self.value, self.inplace)
+
+    def extra_repr(self):
+        inplace_str = ', inplace=True' if self.inplace else ''
+        return 'threshold={}, value={}{}'.format(
+            self.threshold, self.value, inplace_str
+        )
+
 class ReLU(Module):
     r"""Applies the rectified linear unit function element-wise:
 
