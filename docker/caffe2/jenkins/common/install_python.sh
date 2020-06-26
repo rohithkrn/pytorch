@@ -167,5 +167,7 @@ pip install --no-cache-dir \
     typing-extensions \
     pyyaml \
     librosa>=0.6.2 \
-    psutil
+    psutil \
+    numba==0.46.0 \
+    llvmlite==0.30.0
 
