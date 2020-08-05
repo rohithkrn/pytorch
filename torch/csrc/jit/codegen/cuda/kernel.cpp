@@ -440,12 +440,14 @@ void compileKernel(CudaKernel* entry) {
       &program, code.c_str(), nullptr, 0, nullptr, nullptr));
   ResourceGuard holdProgram(
       [&] { AT_CUDA_NVRTC_CHECK(nvrtc().nvrtcDestroyProgram(&program)); });
-
+  #ifdef __HIP_PLATFORM_HCC__
+  std::vector<const char*> args = {};
+  #else
   const std::string compute = "--gpu-architecture=compute_" +
       std::to_string(major) + std::to_string(minor);
   const std::vector<const char*> args = {
       "--std=c++14", compute.c_str(), "-default-device"};
-
+  #endif
   nvrtc().nvrtcAddNameExpression(program, func_name.c_str());
   const auto result =
       nvrtc().nvrtcCompileProgram(program, args.size(), args.data());
@@ -470,7 +472,8 @@ void compileKernel(CudaKernel* entry) {
 
   // TODO: We do go through different code path, should investigate whether this
   // has an impact on generated binary.
-  const char* prefix_env = getenv("PYTORCH_CUDA_FUSER_CUBIN");
+  const ichar* prefix_env = getenv("PYTORCH_CUDA_FUSER_CUBIN");
+  #ifndef __HIP_PLATFORM__HCC__
   if (prefix_env) {
     // Output ptx file
     std::stringstream ptx_file_name;
@@ -514,6 +517,11 @@ void compileKernel(CudaKernel* entry) {
     AT_CUDA_DRIVER_CHECK(
         nvrtc().cuModuleLoadData(&(entry->module_), ptx.data()));
   }
+  #else
+  // load ptx directly
+    AT_CUDA_DRIVER_CHECK(
+        nvrtc().cuModuleLoadData(&(entry->module_), ptx.data()));
+  #endif
   AT_CUDA_DRIVER_CHECK(nvrtc().cuModuleGetFunction(
       &(entry->function_), entry->module_, lowered_kernel_name));
 #if defined(__HIP_PLATFORM_HCC__) && HIP_VERSION < 305
