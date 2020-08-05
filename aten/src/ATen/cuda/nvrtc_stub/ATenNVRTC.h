@@ -79,6 +79,7 @@ namespace at { namespace cuda {
 #define AT_FORALL_NVRTC(_)                       \
   _(nvrtcVersion)                                \
   _(nvrtcCreateProgram)                          \
+  _(nvrtcAddNameExpression)                      \
   _(nvrtcDestroyProgram)                         \
   _(nvrtcGetPTXSize)                             \
   _(nvrtcGetPTX)                                 \
@@ -91,6 +92,7 @@ namespace at { namespace cuda {
   _(cuLaunchKernel)                              \
   _(nvrtcCompileProgram)                         \
   _(cuCtxGetCurrent)                             \
+  _(nvrtcGetLoweredName)                         \
   _(cuModuleUnload)                              \
   _(cuDevicePrimaryCtxGetState)
 
