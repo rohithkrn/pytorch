@@ -24,7 +24,8 @@
 #
 from __future__ import print_function
 from .utils import CodeTemplate, nested_dict, write, uninplace_api_name
-from .gen_autograd import VIEW_FUNCTIONS, VIEW_FUNCTIONS_WITH_METADATA_CHANGE
+from .gen_autograd import VIEW_FUNCTIONS, VIEW_FUNCTIONS_WITH_METADATA_CHANGE, \
+    MULTI_OUTPUT_SAFE_FUNCTIONS, RETURNS_VIEWS_OF_INPUT
 from .gen_autograd_functions import uses_single_grad
 
 # These functions we don't want to record for tracing, because we always want
@@ -93,6 +94,32 @@ DONT_PROFILE = {
     'is_same_size', 'is_set_to', 'is_signed', 'is_sparse', 'numel',
     'size', 'storage_offset', 'stride',
 }
+
+# Note [Manual catchAll kernels]
+# For these ops, we want to manually register to dispatch key catchAll and
+# skip codegen-ed registeration to all keys before catchAll.
+# For codegen this means:
+#   - op set below must match ops with manual_kernel_registration=True in native_functions.yaml
+#     where we skip codegen catchall kernels
+#   - all ops below are part of MANUAL_AUTOGRAD to skip codegen Autograd kernel registration
+#   - all ops below are part of MANUAL_TRACER to skip codegen Tracer kernel registration
+# Note: we still register to dispatch key Profiler for these ops, keeping it untouched for now.
+# You can find the manual registration in torch/csrc/autograd/VariableTypeManual.cpp
+MANUAL_CATCHALL = set([
+    'options', 'data', 'set_data', 'is_leaf', 'output_nr', '_version', 'retain_grad',
+    'backward', 'requires_grad_',
+])
+
+# For these ops we want to skip the codegen-ed registration to both Autograd and Tracer keys.
+# You can find the manual registration in torch/csrc/autograd/VariableTypeManual.cpp
+MANUAL_AUTOGRAD_AND_TRACER = set([
+    'resize_', 'resize_as_', 'detach', 'detach_', 'copy_',
+])
+
+# Currently MANUAL_AUTOGRAD and MANUAL_TRACER share the same set of ops:
+#   union(MANUAL_CATCHALL, MANUAL_AUTOGRAD_AND_TRACER)
+# You can find the manual registration in torch/csrc/autograd/VariableTypeManual.cpp
+MANUAL_AUTOGRAD = MANUAL_TRACER = MANUAL_CATCHALL | MANUAL_AUTOGRAD_AND_TRACER
 
 # We don't set or modify grad_fn on these methods. Generally, they return
 # tensors that have requires_grad=False. In-place functions listed here will
@@ -196,7 +223,7 @@ m.impl_UNBOXED("${unqual_operator_name_with_overload}", &${class_type}::${type_w
 
 WRAPPER_REGISTRATION = CodeTemplate("""\
 m.impl("${unqual_operator_name_with_overload}",
-       c10::impl::hacky_wrapper_for_legacy_signatures(TORCH_FN(${class_type}::${type_wrapper_name}))
+       c10::impl::hacky_wrapper_for_legacy_signatures<${schema_order_cpp_signature}>(TORCH_FN(${class_type}::${type_wrapper_name}))
 );
 """)
 
@@ -373,6 +400,24 @@ ${assign_return_values}c10::Dispatcher::singleton()
 
 
 FACTORY_FUNCTION_NAMES = None
+
+# TODO The maybe_unwrap_optional_tensors is only needed because our at::native::xxx functions
+# still take "Tensor" instead of "optional<Tensor>", so we need CPUType, TypeDefault, ...
+# to do the same. Once at::native::xxx are converted, we can remove use_optional_tensor
+# and use the use_optional_tensor=True behavior always.
+def maybe_unwrap_optional_tensors(option, formals, args):
+    assert len(formals) == len(args), \
+        "Assert we didn't screw up with method_args removing self but forgetting to remove it from formals"
+    if option['use_c10_dispatcher'] == 'full':
+        def maybe_unwrap_optional_tensor(formal, arg):
+            if formal['dynamic_type'] == 'Tensor' and formal['is_nullable']:
+                return "{}.has_value() ? *{} : at::Tensor()".format(arg, arg)
+            else:
+                return arg
+        return [maybe_unwrap_optional_tensor(formal, arg) for (formal, arg) in zip(formals, args)]
+    else:
+        assert option['use_c10_dispatcher'] == 'with_codegenerated_unboxing_wrapper'
+        return args
 
 
 def find_factory_functions(declarations):
@@ -647,7 +692,8 @@ def gen_variable_type_shard(out, aten_declarations, template_path, suffix, heade
     for declaration in aten_declarations:
         formal_types = [arg['type'] for arg in declaration['arguments']]
         type_declarations.append(METHOD_DECLARATION.substitute(declaration))
-        if not declaration['manual_kernel_registration']:
+        strategy = dispatch_strategy(declaration)
+        if declaration['name'] not in MANUAL_AUTOGRAD and strategy == 'use_derived':
             body = emit_body(declaration)
             type_definitions.append(METHOD_DEFINITION.substitute(
                 declaration, type_definition_body=body))
@@ -658,6 +704,9 @@ def gen_variable_type_shard(out, aten_declarations, template_path, suffix, heade
                 assert declaration['use_c10_dispatcher'] == 'with_codegenerated_unboxing_wrapper'
                 wrapper_registrations.append(UNBOXEDONLY_WRAPPER_REGISTRATION.substitute(
                     declaration, class_type='VariableType'))
+
+        # See Note [Manual catchAll kernels]
+        assert (declaration['name'] in MANUAL_CATCHALL) == declaration['manual_kernel_registration']
 
         # Emit ProfiledType code
         profiled_body = emit_profiled_body(declaration)
@@ -673,7 +722,7 @@ def gen_variable_type_shard(out, aten_declarations, template_path, suffix, heade
                 declaration, class_type='ProfiledType'))
 
         # Emit TraceType code
-        if not declaration['manual_kernel_registration']:
+        if declaration['name'] not in MANUAL_TRACER:
             trace_body = emit_trace_body(declaration)
             trace_method_definitions.append(METHOD_DEFINITION.substitute(
                 declaration, type_definition_body=trace_body))
@@ -818,9 +867,8 @@ def emit_body(declaration):
 
     base_name = name[:-1] if inplace else name[:-4] if is_out_fn else name
     view_info = VIEW_FUNCTIONS.get(base_name, None)
-    # TODO: Add back when https://github.com/pytorch/pytorch/pull/32044 lands again
-    # if view_info is None and base_name in RETURNS_VIEWS_OF_INPUT:
-    #     view_info = "self"
+    if view_info is None and base_name in RETURNS_VIEWS_OF_INPUT:
+        view_info = "self"
 
     def is_differentiable(arg):
         if 'TensorOptions' in arg['type']:
@@ -982,7 +1030,8 @@ def emit_body(declaration):
         for arg in saved_variables:
             name = arg['name']
             expr = arg.get('expr', arg['name'])
-            if arg['type'] == 'Tensor' or (is_output and arg['type'] == 'Scalar'):
+            if arg['type'] == 'Tensor' or arg['type'] == 'c10::optional<Tensor>' or \
+                    arg['type'] == 'c10::optional<Tensor>&' or (is_output and arg['type'] == 'Scalar'):
                 name += '_'
                 var = arg['name']
                 if var == 'self' and inplace:
@@ -1090,7 +1139,10 @@ def emit_body(declaration):
                 # If we are in a no grad block, raise a warning
                 # See NOTE [ View + Inplace detection ] for more details about this logic
                 if return_info['dynamic_type'] == 'TensorList':
-                    creation_meta = "CreationMeta::MULTI_OUTPUT_NODE"
+                    if base_name in MULTI_OUTPUT_SAFE_FUNCTIONS:
+                        creation_meta = "CreationMeta::MULTI_OUTPUT_SAFE"
+                    else:
+                        creation_meta = "CreationMeta::MULTI_OUTPUT_NODE"
                     rhs_value = ("as_view(/* base */ {}, /* output */ {}, /* is_differentiable */ true, "
                                  "/* creation_meta */ {})").format(view_info, var, creation_meta)
                 else:
@@ -1150,7 +1202,9 @@ def emit_body(declaration):
                 call = DISPATCH_TO_NON_VAR_TYPE_WITHOUT_RETURN_VALUES.substitute(
                     base_type_call=base_type_call)
         else:
-            call = CALL_DEFAULT.substitute(declaration)
+            args = maybe_unwrap_optional_tensors(declaration, declaration['arguments'], declaration['args'])
+
+            call = CALL_DEFAULT.substitute(declaration, args=args)
             if not modifies_arguments and not returns_void:
                 call = '{} = {}'.format(tie_return_values, call)
             call = call + ';'
@@ -1184,7 +1238,7 @@ def emit_body(declaration):
     def emit_increment_version():
         if not modifies_arguments:
             return []
-        return ['increment_version({});'.format(arg['name']) for arg in differentiable_outputs]
+        return ['increment_version({});'.format(arg['name']) for arg in returns]
 
     env = {}
     combined = nested_dict(env, declaration)
@@ -1201,10 +1255,11 @@ def emit_body(declaration):
     body.append(declare_returned_variables)
 
     body.append(emit_call(env, tie_return_values))
+    if strategy == 'use_derived':
+        body.extend(emit_increment_version())
     if requires_derivative:
         # set_flags has to appear after version_counter, because rebase_history
         # requires that the counter is incremented before it is called
-        body.extend(emit_increment_version())
         body.append(emit_history())
     if requires_derivative:
         body.append(emit_save_outputs())

@@ -486,6 +486,17 @@ def prim_ConstantChunk(g, self, chunks, dim):
     return prim_ConstantSplit(g, self, split_size, dim)
 
 
+@parse_args('v', 'i', 'i')
+def unsafe_chunk(g, self, chunks, dim):
+    split_size = (self.type().sizes()[dim] + chunks - 1) // chunks
+    size = self.type().sizes()[dim]
+    splits = [split_size] * (size // split_size)
+    leftover = size % split_size
+    if leftover:
+        splits.append(leftover)
+    return g.op("Split", self, split_i=splits, axis_i=dim, outputs=1)
+
+
 def split(g, self, split_size_or_sizes, dim):
     if sym_help._is_value(split_size_or_sizes) and split_size_or_sizes.node().kind() != 'onnx::Constant':
         raise RuntimeError("ONNX symbolic expected a constant value of the {} argument, got `{}`"
@@ -504,9 +515,18 @@ def split(g, self, split_size_or_sizes, dim):
     return g.op("Split", self, split_i=splits, axis_i=dim, outputs=1)
 
 
+def unsafe_split(g, self, split_size_or_sizes, dim):
+    return split(g, self, split_size_or_sizes, dim)
+
+
 @parse_args('v', 'is', 'i')
 def split_with_sizes(g, self, split_sizes, dim):
     return g.op("Split", self, split_i=split_sizes, axis_i=dim, outputs=1)
+
+
+@parse_args('v', 'is', 'i')
+def unsafe_split_with_sizes(g, self, split_sizes, dim):
+    return split_with_sizes(g, self, split_sizes, dim)
 
 
 @parse_args('v', 'i')
@@ -1544,6 +1564,11 @@ def full_like(g, input, fill_value, dtype=None, layout=None, device=None, pin_me
                     value_t=torch.tensor([fill_value], dtype=sym_help.scalar_type_to_pytorch_type[dtype]))
 
 
+def eye(g, n, m, dtype=None, layout=None, device=None, pin_memory=False):
+    shape = g.op("Concat", g.op("Unsqueeze", n, axes_i=[0]), g.op("Unsqueeze", m, axes_i=[0]), axis_i=0)
+    tensor = zeros(g, shape, dtype, layout, device)
+    return g.op("EyeLike", tensor)
+
 @parse_args('v', 'v', 'v', 'v', 'i')
 def slice(g, self, dim, start, end, step):
     if step != 1:
@@ -2423,3 +2448,33 @@ def take(g, self, index):
     out = index_select(g, self_flattened, 0, index)
     out = reshape_as(g, out, index)
     return out
+
+@parse_args('v', 'v', 'is', 'i')
+def as_strided(g, self, sizes, strides, offset=None):
+    sizes = sym_help._maybe_get_const(sizes, 'is')
+    rank = len(strides)
+    self_1d = g.op("Reshape", self, g.op("Constant", value_t=torch.tensor([-1], dtype=torch.int64)))
+    if not sym_help._is_value(sizes):
+        ind = torch.tensor([0], dtype=torch.long)
+        for i, (size, stride) in enumerate(zip(sizes, strides)):
+            r_size = [1] * rank
+            r_size[i] = -1
+            ind = ind + torch.arange(size).view(r_size) * stride
+        if offset:
+            ind = ind + offset
+        return g.op("Gather", self_1d, g.op("Constant", value_t=ind))
+    else:
+        ind = None
+        for i, stride in enumerate(strides):
+            r_size = [1] * rank
+            r_size[i] = -1
+            size = select(g, sizes, g.op("Constant", value_t=torch.tensor([0])), g.op("Constant", value_t=torch.tensor(i)))
+            tmp_ind = g.op("Reshape", arange(g, size, 4, None, None, None), g.op("Constant", value_t=torch.tensor(r_size)))
+            tmp_ind = g.op("Mul", tmp_ind, g.op("Constant", value_t=torch.tensor([stride])))
+            if ind is None:
+                ind = tmp_ind
+            else:
+                ind = g.op("Add", ind, tmp_ind)
+        if offset:
+            ind = g.op("Add", ind, g.op("Constant", torch.tensor([offset])))
+        return g.op("Gather", self_1d, ind)
