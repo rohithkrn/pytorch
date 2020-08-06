@@ -1,8 +1,8 @@
 #include <ATen/CUDAGeneratorImpl.h>
-#include <ATen/cuda/CUDAContext.h>
-#include <ATen/cuda/nvrtc_stub/ATenNVRTC.h>
+#include <ATen/hip/HIPContext.h>
+#include <ATen/hip/nvrtc_stub/ATenNVRTC.h>
 #include <c10/core/ScalarType.h>
-#include <c10/cuda/CUDACachingAllocator.h>
+#include <ATen/hip/impl/HIPCachingAllocatorMasqueradingAsCUDA.h>
 #include <c10/util/ArrayRef.h>
 
 #include <torch/csrc/jit/codegen/cuda/kernel.h>
@@ -411,21 +411,21 @@ void compileKernel(CudaKernel* entry) {
   // vvv NVRTC COMPILATION vvv
 
   // lazily construct context if non-existing yet;
-  CUcontext pctx = nullptr;
-  AT_CUDA_DRIVER_CHECK(nvrtc().cuCtxGetCurrent(&pctx));
+  hipCtx_t pctx = nullptr;
+  AT_CUDA_DRIVER_CHECK(nvrtc().hipCtxGetCurrent(&pctx));
   if (!pctx) {
     std::unique_lock<std::mutex> cudaFreeMutexLock(
-        *(c10::cuda::CUDACachingAllocator::getFreeMutex()));
-    cudaFree(nullptr);
+        *(c10::hip::HIPCachingAllocator::getFreeMutex()));
+    hipFree(nullptr);
   }
 
   // set device for the operation;
-  at::cuda::set_device(entry->device_);
+  at::hip::set_device(entry->device_);
   entry->has_random_ = entry->fusion_->hasRNG();
 
   const auto prop = at::cuda::getCurrentDeviceProperties();
   int nvrtc_major, nvrtc_minor;
-  AT_CUDA_NVRTC_CHECK(nvrtc().nvrtcVersion(&nvrtc_major, &nvrtc_minor));
+  AT_CUDA_NVRTC_CHECK(nvrtc().hiprtcVersion(&nvrtc_major, &nvrtc_minor));
 
   // Short-circuits if NVRTC version too low
   TORCH_INTERNAL_ASSERT(nvrtc_major >= 6);
@@ -435,11 +435,11 @@ void compileKernel(CudaKernel* entry) {
   int major, minor;
   major = prop->major;
   minor = prop->minor;
-  nvrtcProgram program;
-  AT_CUDA_NVRTC_CHECK(nvrtc().nvrtcCreateProgram(
+  hiprtcProgram program;
+  AT_CUDA_NVRTC_CHECK(nvrtc().hiprtcCreateProgram(
       &program, code.c_str(), nullptr, 0, nullptr, nullptr));
   ResourceGuard holdProgram(
-      [&] { AT_CUDA_NVRTC_CHECK(nvrtc().nvrtcDestroyProgram(&program)); });
+      [&] { AT_CUDA_NVRTC_CHECK(nvrtc().hiprtcDestroyProgram(&program)); });
   #ifdef __HIP_PLATFORM_HCC__
   std::vector<const char*> args = {};
   #else
@@ -448,32 +448,32 @@ void compileKernel(CudaKernel* entry) {
   const std::vector<const char*> args = {
       "--std=c++14", compute.c_str(), "-default-device"};
   #endif
-  nvrtc().nvrtcAddNameExpression(program, func_name.c_str());
+  nvrtc().hiprtcAddNameExpression(program, func_name.c_str());
   const auto result =
-      nvrtc().nvrtcCompileProgram(program, args.size(), args.data());
-  if (result != NVRTC_SUCCESS) {
+      nvrtc().hiprtcCompileProgram(program, args.size(), args.data());
+  if (result != HIPRTC_SUCCESS) {
     size_t logsize;
-    nvrtc().nvrtcGetProgramLogSize(program, &logsize);
+    nvrtc().hiprtcGetProgramLogSize(program, &logsize);
     std::vector<char> log(logsize);
-    nvrtc().nvrtcGetProgramLog(program, log.data());
+    nvrtc().hiprtcGetProgramLog(program, log.data());
 
     TORCH_INTERNAL_ASSERT(
         false, code.c_str(), "\nCUDA NVRTC compile error: ", log.data());
   }
   const char* lowered_kernel_name;
-  nvrtc().nvrtcGetLoweredName(program, func_name.c_str(), &lowered_kernel_name);
+  nvrtc().hiprtcGetLoweredName(program, func_name.c_str(), &lowered_kernel_name);
 
   AT_CUDA_NVRTC_CHECK(result);
   size_t ptx_size;
-  AT_CUDA_NVRTC_CHECK(nvrtc().nvrtcGetPTXSize(program, &ptx_size));
+  AT_CUDA_NVRTC_CHECK(nvrtc().hiprtcGetCodeSize(program, &ptx_size));
   std::vector<char> ptx;
   ptx.resize(ptx_size);
-  AT_CUDA_NVRTC_CHECK(nvrtc().nvrtcGetPTX(program, ptx.data()));
+  AT_CUDA_NVRTC_CHECK(nvrtc().hiprtcGetCode(program, ptx.data()));
 
   // TODO: We do go through different code path, should investigate whether this
   // has an impact on generated binary.
-  const ichar* prefix_env = getenv("PYTORCH_CUDA_FUSER_CUBIN");
-  #ifndef __HIP_PLATFORM__HCC__
+  const char* prefix_env = getenv("PYTORCH_CUDA_FUSER_CUBIN");
+  #ifndef __HIP_PLATFORM_HCC__
   if (prefix_env) {
     // Output ptx file
     std::stringstream ptx_file_name;
@@ -486,10 +486,10 @@ void compileKernel(CudaKernel* entry) {
 
     CUlinkState linkState;
 
-    AT_CUDA_DRIVER_CHECK(nvrtc().cuLinkCreate(0, nullptr, nullptr, &linkState));
-    AT_CUDA_DRIVER_CHECK(nvrtc().cuLinkAddData(
+    AT_CUDA_DRIVER_CHECK(nvrtc().hipLinkCreate(0, nullptr, nullptr, &linkState));
+    AT_CUDA_DRIVER_CHECK(nvrtc().hipLinkAddData(
         linkState,
-        CU_JIT_INPUT_PTX,
+        hipJitInputTypePtx,
         ptx.data(),
         ptx_size,
         "compiling PTX",
@@ -498,7 +498,7 @@ void compileKernel(CudaKernel* entry) {
         nullptr));
     size_t cubinSize;
     void* cubin;
-    AT_CUDA_DRIVER_CHECK(nvrtc().cuLinkComplete(linkState, &cubin, &cubinSize));
+    AT_CUDA_DRIVER_CHECK(nvrtc().hipLinkComplete(linkState, &cubin, &cubinSize));
 
     // Output binary file
     std::stringstream cubin_file_name;
@@ -511,18 +511,18 @@ void compileKernel(CudaKernel* entry) {
     }
 
     // load compiled cubin
-    AT_CUDA_DRIVER_CHECK(nvrtc().cuModuleLoadData(&(entry->module_), cubin));
+    AT_CUDA_DRIVER_CHECK(nvrtc().hipModuleLoadData(&(entry->module_), cubin));
   } else {
     // load ptx directly
     AT_CUDA_DRIVER_CHECK(
-        nvrtc().cuModuleLoadData(&(entry->module_), ptx.data()));
+        nvrtc().hipModuleLoadData(&(entry->module_), ptx.data()));
   }
   #else
   // load ptx directly
     AT_CUDA_DRIVER_CHECK(
-        nvrtc().cuModuleLoadData(&(entry->module_), ptx.data()));
+        nvrtc().hipModuleLoadData(&(entry->module_), ptx.data()));
   #endif
-  AT_CUDA_DRIVER_CHECK(nvrtc().cuModuleGetFunction(
+  AT_CUDA_DRIVER_CHECK(nvrtc().hipModuleGetFunction(
       &(entry->function_), entry->module_, lowered_kernel_name));
 #if defined(__HIP_PLATFORM_HCC__) && HIP_VERSION < 305
   // HIP function signature is not compatible yet
@@ -531,7 +531,7 @@ void compileKernel(CudaKernel* entry) {
       &max_blocks, entry->function_, 128, 0));
   entry->max_blocks_ = max_blocks;
 #else
-  AT_CUDA_DRIVER_CHECK(nvrtc().cuOccupancyMaxActiveBlocksPerMultiprocessor(
+  AT_CUDA_DRIVER_CHECK(nvrtc().hipModuleOccupancyMaxActiveBlocksPerMultiprocessor(
       &entry->max_blocks_, entry->function_, 128, 0));
 #endif
   entry->max_blocks_ *= prop->multiProcessorCount;
@@ -544,9 +544,9 @@ void runKernel(
     const std::vector<int64_t>& broadcasted_shape) {
   validateKernelArgs(*entry, inputs, outputs);
 
-  const auto prior_device = at::cuda::current_device();
-  at::cuda::set_device(entry->device_);
-  auto stream = at::cuda::getCurrentCUDAStream();
+  const auto prior_device = at::hip::current_device();
+  at::hip::set_device(entry->device_);
+  auto stream = at::hip::getCurrentHIPStreamMasqueradingAsCUDA();
 
   // TODO: Proper API to establish reasonable launch configurations;
   // Naive launch config;
@@ -611,7 +611,7 @@ void runKernel(
   }
 
   // launch kernel;
-  AT_CUDA_DRIVER_CHECK(nvrtc().cuLaunchKernel(
+  AT_CUDA_DRIVER_CHECK(nvrtc().hipModuleLaunchKernel(
       entry->function_,
       nBlocks,
       1,
@@ -625,7 +625,7 @@ void runKernel(
       nullptr));
 
   // Resets device (see at::DeviceGuard notes above)
-  at::cuda::set_device(prior_device);
+  at::hip::set_device(prior_device);
 }
 
 // WARNING:
@@ -636,9 +636,9 @@ void runTestKernel(
     const std::vector<at::Tensor>& outputs) {
   validateKernelArgs(*entry, inputs, outputs);
 
-  const auto prior_device = at::cuda::current_device();
-  at::cuda::set_device(entry->device_);
-  auto stream = at::cuda::getCurrentCUDAStream();
+  const auto prior_device = at::hip::current_device();
+  at::hip::set_device(entry->device_);
+  auto stream = at::hip::getCurrentHIPStreamMasqueradingAsCUDA();
 
   // TODO: Proper API to establish reasonable launch configurations;
   // Naive launch config;
@@ -706,7 +706,7 @@ void runTestKernel(
   }
 
   // launch kernel;
-  AT_CUDA_DRIVER_CHECK(nvrtc().cuLaunchKernel(
+  AT_CUDA_DRIVER_CHECK(nvrtc().hipModuleLaunchKernel(
       entry->function_,
       entry->grid_.x,
       entry->grid_.y,
@@ -720,7 +720,7 @@ void runTestKernel(
       nullptr));
 
   // Resets device (see at::DeviceGuard notes above)
-  at::cuda::set_device(prior_device);
+  at::hip::set_device(prior_device);
 }
 
 } // namespace cuda
