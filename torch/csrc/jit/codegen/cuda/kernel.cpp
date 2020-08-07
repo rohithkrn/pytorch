@@ -149,6 +149,10 @@ struct KernelArgumentHolder {
 
 std::pair<std::string, std::string> codeGeneration(Fusion* fusion) {
   std::stringstream str_stream;
+  #ifdef __HIP_PLATFORM_HCC__
+  str_stream << "#include <hip/hip_runtime.h>" << "\n"
+             << "#include <hip/hip_fp16.h>" << "\n";
+  #endif
   str_stream << "namespace " << kCgNamespace << " {\n"
              << code_template_tensor_struct << "\n"
              << code_fp16_support << "\n"
@@ -441,7 +445,7 @@ void compileKernel(CudaKernel* entry) {
   ResourceGuard holdProgram(
       [&] { AT_CUDA_NVRTC_CHECK(nvrtc().nvrtcDestroyProgram(&program)); });
   #ifdef __HIP_PLATFORM_HCC__
-  std::vector<const char*> args = {};
+  std::vector<const char*> args = {"--std=c++14"};
   #else
   const std::string compute = "--gpu-architecture=compute_" +
       std::to_string(major) + std::to_string(minor);
