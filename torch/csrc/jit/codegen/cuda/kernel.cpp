@@ -472,8 +472,8 @@ void compileKernel(CudaKernel* entry) {
 
   // TODO: We do go through different code path, should investigate whether this
   // has an impact on generated binary.
-  const ichar* prefix_env = getenv("PYTORCH_CUDA_FUSER_CUBIN");
-  #ifndef __HIP_PLATFORM__HCC__
+  const char* prefix_env = getenv("PYTORCH_CUDA_FUSER_CUBIN");
+  #ifndef __HIP_PLATFORM_HCC__
   if (prefix_env) {
     // Output ptx file
     std::stringstream ptx_file_name;
