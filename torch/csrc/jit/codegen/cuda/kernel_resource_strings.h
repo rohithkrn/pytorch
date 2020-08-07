@@ -1,3 +1,4 @@
+#include "hip/hip_runtime.h"
 namespace torch {
 namespace jit {
 namespace fuser {
@@ -11,7 +12,7 @@ typedef short int  int16_t;
 typedef long long int int64_t;
 
 template<typename T, int N>
-struct Tensor {
+__device__ struct Tensor {
   T& operator[](int64_t ind) {
     return data[ind];
   };
@@ -24,7 +25,7 @@ struct Tensor {
 // Specialization for 0-dim case as it does not need size and stride arrays.
 // They will be an error as well since zero-length arrays are not allowed.
 template<typename T>
-struct Tensor<T, 0> {
+__device__ struct Tensor<T, 0> {
   T& operator[](int64_t) {
     return *data;
   };
@@ -34,6 +35,9 @@ struct Tensor<T, 0> {
 )";
 
 // Code support for FP16 __half type and intrinsics
+#ifdef __HIP_PLATFORM_HCC__
+static auto code_fp16_support = R"()";
+#else
 static auto code_fp16_support = R"(
 #define __HALF_TO_US(var) *(reinterpret_cast<unsigned short *>(&(var)))
 #define __HALF_TO_CUS(var) *(reinterpret_cast<const unsigned short *>(&(var)))
@@ -55,7 +59,7 @@ __device__ float __half2float(const __half h) {
   return val;
 }
 )";
-
+#endif
 // struct and code for functions that need random number generation
 static auto code_random_number_gen = R"(
 class Philox {
@@ -312,18 +316,21 @@ __host__ __device__ __forceinline__ size_t size(const dim3& d) {
   return (size_t)d.x * (size_t)d.y * (size_t)d.z;
 }
 
-__host__ __device__ __forceinline__ int isize(const dim3& d) {
-  return d.x * d.y * d.z;
-}
+//__host__ __device__ __forceinline__ int isize(const dim3& d) {
+//  return d.x * d.y * d.z;
+//}
+
+#define isize(d) d.x * d.y * d.z
 
 __host__ __device__ __forceinline__ size_t offset(const dim3& pos, const dim3& dim) {
   return (size_t)pos.x + (size_t)pos.y * (size_t)dim.x +
       (size_t)pos.z * (size_t)dim.x * (size_t)dim.y;
 }
 
-__host__ __device__ __forceinline__ size_t ioffset(const dim3& pos, const dim3& dim) {
-  return pos.x + pos.y * dim.x + pos.z * dim.x * dim.y;
-}
+//__host__ __device__ __forceinline__ size_t ioffset(const dim3& pos, const dim3& dim) {
+//  return pos.x + pos.y * dim.x + pos.z * dim.x * dim.y;
+//}
+#define ioffset(pos, dim) pos.x + pos.y * dim.x + pos.z * dim.x * dim.y
 
 // Returns dim3 of each reduction segment.
 template <bool X_BLOCK, bool Y_BLOCK, bool Z_BLOCK>
@@ -386,7 +393,8 @@ __host__ __device__ dim3 dimension_of_reduction_block(const dim3& block_dim) {
 // Returns the number of threads of each reduction block.
 template <bool X_THREAD, bool Y_THREAD, bool Z_THREAD>
 __host__ __device__ int size_of_reduction_block(const dim3& block_dim) {
-  return isize(dimension_of_reduction_block<X_THREAD, Y_THREAD, Z_THREAD>(block_dim));
+  auto tmp_dim = dimension_of_reduction_block<X_THREAD, Y_THREAD, Z_THREAD>(block_dim);
+  return isize(tmp_dim);
 }
 
 // Returns the linear offset of a thread in a reduction block.
