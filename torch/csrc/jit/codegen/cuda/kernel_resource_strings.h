@@ -12,8 +12,8 @@ typedef short int  int16_t;
 typedef long long int int64_t;
 
 template<typename T, int N>
-__device__ struct Tensor {
-  T& operator[](int64_t ind) {
+  struct Tensor {
+  __device__ T& operator[](int64_t ind) {
     return data[ind];
   };
 
@@ -25,8 +25,8 @@ __device__ struct Tensor {
 // Specialization for 0-dim case as it does not need size and stride arrays.
 // They will be an error as well since zero-length arrays are not allowed.
 template<typename T>
-__device__ struct Tensor<T, 0> {
-  T& operator[](int64_t) {
+  struct Tensor<T, 0> {
+  __device__ T& operator[](int64_t) {
     return *data;
   };
 
