@@ -3,7 +3,7 @@ import torch
 import torch.nn.functional as F
 import unittest
 
-from torch.testing._internal.common_utils import suppress_warnings, num_profiled_runs
+from torch.testing._internal.common_utils import suppress_warnings, num_profiled_runs, skipIfRocm
 
 from te_utils import CudaCodeGenCreated, CudaCodeGenExecuted, \
     LLVMCodeGenExecuted, SimpleIREvalExecuted
@@ -126,6 +126,7 @@ class TestTensorExprFuser(BaseTestClass):
         assert cuda_cg_created.elapsed_value() >= 1
 
 
+    @skipIfRocm
     def test_broadcast_cuda(self):
         if not torch.cuda.is_available():
             return

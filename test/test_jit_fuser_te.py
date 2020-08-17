@@ -19,7 +19,7 @@ torch._C._jit_set_profiling_executor(True)
 torch._C._jit_set_profiling_mode(True)
 
 from torch.testing._internal.common_utils import run_tests, IS_SANDCASTLE, ProfilingMode, GRAPH_EXECUTOR, \
-    enable_profiling_mode_for_profiling_tests
+    enable_profiling_mode_for_profiling_tests, skipIfRocm
 from torch.testing._internal.jit_utils import JitTestCase, _inline_everything, \
     RUN_CUDA, RUN_CUDA_HALF, RUN_CUDA_MULTI_GPU
 
@@ -257,6 +257,7 @@ class TestTEFuser(JitTestCase):
     def test_chunk_correctness(self):
         return self._test_chunk_correctness(self, 'cpu')
 
+    @skipIfRocm
     @unittest.skipIf(not RUN_CUDA, "No CUDA")
     def test_chunk_correctness_cuda(self):
         return self._test_chunk_correctness(self, 'cuda')
