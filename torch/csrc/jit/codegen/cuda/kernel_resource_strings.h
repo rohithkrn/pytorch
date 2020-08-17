@@ -12,7 +12,7 @@ typedef short int  int16_t;
 typedef long long int int64_t;
 
 template<typename T, int N>
-  struct Tensor {
+struct Tensor {
   __device__ T& operator[](int64_t ind) {
     return data[ind];
   };
@@ -25,7 +25,7 @@ template<typename T, int N>
 // Specialization for 0-dim case as it does not need size and stride arrays.
 // They will be an error as well since zero-length arrays are not allowed.
 template<typename T>
-  struct Tensor<T, 0> {
+struct Tensor<T, 0> {
   __device__ T& operator[](int64_t) {
     return *data;
   };
@@ -316,10 +316,6 @@ __host__ __device__ __forceinline__ size_t size(const dim3& d) {
   return (size_t)d.x * (size_t)d.y * (size_t)d.z;
 }
 
-//__host__ __device__ __forceinline__ int isize(const dim3& d) {
-//  return d.x * d.y * d.z;
-//}
-
 #define isize(d) d.x * d.y * d.z
 
 __host__ __device__ __forceinline__ size_t offset(const dim3& pos, const dim3& dim) {
@@ -327,9 +323,6 @@ __host__ __device__ __forceinline__ size_t offset(const dim3& pos, const dim3& d
       (size_t)pos.z * (size_t)dim.x * (size_t)dim.y;
 }
 
-//__host__ __device__ __forceinline__ size_t ioffset(const dim3& pos, const dim3& dim) {
-//  return pos.x + pos.y * dim.x + pos.z * dim.x * dim.y;
-//}
 #define ioffset(pos, dim) pos.x + pos.y * dim.x + pos.z * dim.x * dim.y
 
 // Returns dim3 of each reduction segment.
