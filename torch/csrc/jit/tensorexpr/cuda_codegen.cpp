@@ -732,6 +732,9 @@ void CudaCodeGen::Initialize() {
   printer_ =
       std::make_unique<CudaPrinter>(&oss_, cuda_analysis_.get(), has_random_);
 
+  #ifdef __HIP_PLATFORM_HCC__
+  os() << "#include <hip/hip_runtime.h>\n";
+  #endif
   os() << "#define NAN __int_as_float(0x7fffffff)\n"
           "#define POS_INFINITY __int_as_float(0x7f800000)\n"
           "#define NEG_INFINITY __int_as_float(0xff800000)\n";
