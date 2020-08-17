@@ -160,7 +160,7 @@ test_python_ge_config_legacy() {
 }
 
 test_python_all_except_nn_and_cpp_extensions() {
-  time python test/run_test.py --exclude test_nn --verbose --determine-from="$DETERMINE_FROM"
+  python test/run_test.py --exclude test_jit_cuda_fuser_profiling test_jit_cuda_fuser_legacy test_nn test_jit_profiling test_jit_legacy test_jit_fuser_legacy test_jit_fuser_te test_tensorexpr --verbose --determine-from="$DETERMINE_FROM"
   assert_git_not_dirty
 }
 
@@ -379,6 +379,10 @@ elif [[ "${BUILD_ENVIRONMENT}" == *libtorch* ]]; then
 elif [[ "${BUILD_ENVIRONMENT}" == *-test1 || "${JOB_BASE_NAME}" == *-test1 ]]; then
   test_python_nn
   test_cpp_extensions
+  if [[ "${BUILD_ENVIRONMENT}" == *rocm* ]]; then
+    test_python_ge_config_legacy
+    test_python_ge_config_profiling
+  fi
 elif [[ "${BUILD_ENVIRONMENT}" == *-test2 || "${JOB_BASE_NAME}" == *-test2 ]]; then
   install_torchvision
   test_python_all_except_nn_and_cpp_extensions
