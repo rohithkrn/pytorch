@@ -44,10 +44,6 @@ if(USE_CUDA)
   list(APPEND JIT_TEST_SRCS ${JIT_TEST_ROOT}/test_gpu.cpp)
 endif()
 
-if(USE_ROCM)
-  list(APPEND JIT_TEST_SRCS ${JIT_TEST_ROOT}/test_gpu.cpp)
-endif()
-
 set(JIT_TEST_SRCS ${JIT_TEST_SRCS} PARENT_SCOPE)
 
 add_executable(test_jit
