@@ -75,7 +75,7 @@ __global__ void kernelHistogram1D(
       if (bVal >= minvalue && bVal <= maxvalue) {
         // Use value at `b` as an offset of `smem`
         const IndexType bin = getBin<input_t, IndexType>(bVal, minvalue, maxvalue, nbins);
-        gpuAtomicAdd(&smem[bin], getOp(linearIndex));
+        gpuAtomicAddNoReturn(&smem[bin], getOp(linearIndex));
       }
     }
     __syncthreads();
@@ -85,7 +85,7 @@ __global__ void kernelHistogram1D(
     for (IndexType i = threadIdx.x; i < a.sizes[0]; i += blockDim.x) {
       const IndexType aOffset =
           detail::IndexToOffset<output_t, IndexType, ADims>::get(i, a);
-      gpuAtomicAdd(&a.data[aOffset], smem[i]);
+      gpuAtomicAddNoReturn(&a.data[aOffset], smem[i]);
     }
 
   } else if (MemoryType == CUDAHistogramMemoryType::MULTI_BLOCK) {
@@ -104,7 +104,7 @@ __global__ void kernelHistogram1D(
         const IndexType pIdx = p.strides[0] * blockIdx.x + bin;
         const IndexType pOffset =
             detail::IndexToOffset<output_t, IndexType, PDims>::get(pIdx, p);
-        gpuAtomicAdd(&p.data[pOffset], getOp(linearIndex));
+        gpuAtomicAddNoReturn(&p.data[pOffset], getOp(linearIndex));
       }
     }
     __syncthreads();
@@ -117,7 +117,7 @@ __global__ void kernelHistogram1D(
     for (IndexType i = threadIdx.x; i < a.sizes[0]; i += blockDim.x) {
       const IndexType aOffset =
           detail::IndexToOffset<output_t, IndexType, ADims>::get(i, a);
-      gpuAtomicAdd(&a.data[aOffset], p.data[pOffset + i]);
+      gpuAtomicAddNoReturn(&a.data[aOffset], p.data[pOffset + i]);
     }
 
   } else {
@@ -134,7 +134,7 @@ __global__ void kernelHistogram1D(
         const IndexType bin = getBin<input_t, IndexType>(bVal, minvalue, maxvalue, nbins);
         const IndexType aOffset =
             detail::IndexToOffset<output_t, IndexType, ADims>::get(bin, a);
-        gpuAtomicAdd(&a.data[aOffset], getOp(linearIndex));
+        gpuAtomicAddNoReturn(&a.data[aOffset], getOp(linearIndex));
       }
     }
   }
@@ -147,7 +147,7 @@ __global__ void kernelHistogram1D(
          SHARED_MEM,                                                       \
          getCurrentCUDAStream()>>>(                    \
           aInfo, pInfo, bInfo, nbins, minvalue, maxvalue, totalElements, WEIGHTS_OP);        \
-  AT_ASSERTM(cudaGetLastError() == cudaSuccess, "kernelHistogram1D failed");
+  TORCH_INTERNAL_ASSERT(cudaGetLastError() == cudaSuccess, "kernelHistogram1D failed");
 
 #define HANDLE_SWITCH_CASE(mType, getOp)                                   \
   switch (mType) {                                                         \
@@ -165,7 +165,7 @@ inline int64_t getFreeGlobalMemory() {
   // no need to use `cudaSetDevice`
   size_t free_mem, total_mem;
   cudaMemGetInfo(&free_mem, &total_mem);
-  AT_ASSERTM(
+  TORCH_INTERNAL_ASSERT(
       cudaGetLastError() == cudaSuccess,
       "CUDA_tensor_histogram failed to get free global memory");
   return static_cast<int64_t>(free_mem);
