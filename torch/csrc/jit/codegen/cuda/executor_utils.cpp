@@ -265,10 +265,14 @@ NvrtcFunction nvrtcCompile(
         at::globalContext().getNVRTC().nvrtcDestroyProgram(&program));
   });
 
+  #ifdef __HIP_PLATFORM_HCC__
+  std::vector<const char*> args = {"--std=c++14"};
+  #else
   const std::string compute = "--gpu-architecture=compute_" +
       std::to_string(major) + std::to_string(minor);
   const std::vector<const char*> args = {
       "--std=c++14", compute.c_str(), "-default-device"};
+  #endif
 
   at::globalContext().getNVRTC().nvrtcAddNameExpression(
       program, func_name.c_str());
@@ -302,6 +306,7 @@ NvrtcFunction nvrtcCompile(
   // TODO: We do go through different code path, should investigate whether this
   // has an impact on generated binary.
   const char* prefix_env = getenv("PYTORCH_CUDA_FUSER_CUBIN");
+  #ifndef __HIP_PLATFORM_HCC__
   if (prefix_env) {
     // Output ptx file
     std::stringstream ptx_file_name;
@@ -351,6 +356,12 @@ NvrtcFunction nvrtcCompile(
     AT_CUDA_DRIVER_CHECK(at::globalContext().getNVRTC().cuModuleLoadData(
         &(compiled_kernel_.module), ptx.data()));
   }
+  #else
+  // load ptx directly
+    AT_CUDA_DRIVER_CHECK(at::globalContext().getNVRTC().cuModuleLoadData(
+        &(compiled_kernel_.module), ptx.data()));
+
+  #endif
   AT_CUDA_DRIVER_CHECK(at::globalContext().getNVRTC().cuModuleGetFunction(
       &(compiled_kernel_.function),
       compiled_kernel_.module,
