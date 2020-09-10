@@ -25,7 +25,7 @@ std::string FusionExecutor::getStructuredCode(const std::string& kernel) {
   code += std::string("#include <hip/hip_runtime.h>\n") +
           std::string("#include <hip/hip_fp16.h>\n");
   #endif
-  code = std::string("namespace ") +
+  code += std::string("namespace ") +
       FusionExecutor::kernelNamespace() + " {\n" +
       executor_utils::kernelPreamble() + kernel + "}\n";
 
