@@ -393,6 +393,7 @@ class TestTEFuser(JitTestCase):
         ge = self.checkScript(fn, inputs)
         self.assertAllFused(ge.graph_for(*inputs))
 
+    @skipIfRocm
     def test_minmax(self):
         def tmax(a, b):
             return torch.max(2 * a, b)
