@@ -91,18 +91,8 @@ class FullyConnectedOp final : public Operator<Context> {
     if (fp16_type<MATH>()) {
       math_type = TensorProto_DataType_FLOAT16;
     }
-    //std::cout << "--------------> Rohith: in fc op\n";
-    // W * x
-    //#if defined(__HIP_DEVICE_COMPILE__)
-    //const float alpha = 1;
-    //const float beta = 1;
-    //auto C = caffe2::empty({N}, at::dtype<T_B>()).device(Context::GetDeviceType());
+    
     if(FuseBiasAdd) {
-    //std::cout << "-------------> Rohith: calling GemmExt2\n";
-    std::cout << "In wrapper - M: " << M << std::endl;
-    std::cout << "In wrapper - N: " << N << std::endl;
-    std::cout << "In wrapper - K: " << K << std::endl;
-    std::cout << "In wrapper - TransposeWeight: " << TransposeWeight << std::endl;
     math::Gemm<float, Context, Engine, FuseBiasAdd>(
         CblasNoTrans,
         TransposeWeight ? CblasTrans : CblasNoTrans,
@@ -118,7 +108,6 @@ class FullyConnectedOp final : public Operator<Context> {
         &context_
     ); 
     } else {
-    std::cout << "-------------> Rohith: calling Gemm\n";
     math::Gemm<T_X, Context, Engine>(
         CblasNoTrans,
         TransposeWeight ? CblasTrans : CblasNoTrans,

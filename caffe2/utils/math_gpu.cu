@@ -542,11 +542,6 @@ CAFFE2_CUDA_EXPORT void Gemm<float, CUDAContext, DefaultEngine, true>(
     const float* C,
     float* D,
     CUDAContext* context) {
-    std::cout << "----------------------> calling rocblas_ext2\n"; 
-    //std::cout << "Rohit: In rbext2 - M: " << M << std::endl;
-    //std::cout << "Rohit: In rbext2 - N: " << N << std::endl;
-    //std::cout << "Rohit: In rbext2 - K: " << K << std::endl;
-    //std::cout << "Rohit: In rbext2 - M: " << M << std::endl;
     const int row_stride_A = (trans_A == CblasNoTrans) ? 1 : K;
     const int col_stride_A = (trans_A == CblasNoTrans) ? K : 1;
     const int row_stride_B = (trans_B == CblasNoTrans) ? 1 : N;

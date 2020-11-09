@@ -40,7 +40,7 @@ class TestFcOperator(serial.SerializedTestCase):
             else:
                 W = np.random.rand(n, k).astype(dtype) - 0.5
         b = np.random.rand(n).astype(dtype) - 0.5
-        print("Rohith: bias - ", b)
+        
         def fc_op(X, W, b):
             return [np.dot(X, W.reshape(n, k).transpose()) + b.reshape(n)]
 
@@ -80,15 +80,14 @@ class TestFcOperator(serial.SerializedTestCase):
             self.assertGradientChecks(gc, op, [X, W, b], i, [0],
                                       threshold=threshold, stepsize=stepsize)
 
-    #@settings(max_examples=50, deadline=20000, suppress_health_check=[HealthCheck.filter_too_much])
-    @settings(max_examples=1, deadline=20000)
-    @serial.given(n=st.integers(5, 5),
-           m=st.integers(5, 5),
-           k=st.integers(5, 5),
+    @settings(max_examples=50, deadline=20000, suppress_health_check=[HealthCheck.filter_too_much])
+    @serial.given(n=st.integers(1, 5),
+           m=st.integers(0, 5),
+           k=st.integers(1, 5),
            multi_dim=st.sampled_from([True, False]),
-           dtype=st.sampled_from([np.float32]),
-           engine=st.sampled_from(['']),
-           **hu.gcs_gpu_only)
+           dtype=st.sampled_from([np.float32, np.float16]),
+           engine=st.sampled_from(['', 'TENSORCORE']),
+           **hu.gcs)
     def test_fc(self, **kwargs):
         self._run_test(transposed=False, **kwargs)
 
